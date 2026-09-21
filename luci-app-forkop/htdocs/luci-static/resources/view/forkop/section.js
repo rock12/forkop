@@ -3909,6 +3909,9 @@ function validateOutboundJsonItemsBeforeSave(_section_id, values) {
     tags.push(tag);
   }
 
+  return true;
+}
+
 function cleanAwgHex(val) {
   if (!val) return "";
   let s = `${val}`.trim();
