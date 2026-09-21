@@ -803,7 +803,8 @@ function init_config(populate_nft, caches_prepared, no_refresh, prepared_deferre
             service_listen_address_value(settings),
             mwan3_active ? "1" : "0",
             sing_box_is_extended(sing_box_version()) ? "1" : "0",
-            deferred_sections
+            deferred_sections,
+            sing_box_version()
         ]) + " >" + shell_quote(runtime_log) + " 2>&1"
     );
     if (generate_status != 0) {

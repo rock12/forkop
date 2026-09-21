@@ -21,6 +21,7 @@ let fixture_uci_data = null;
 let runtime_settings_cache = null;
 let runtime_ruleset_folder = runtime_constants.TMP_RULESET_FOLDER;
 let runtime_supports_xhttp = true;
+let runtime_sing_box_version = "";
 
 let as_string = common.as_string;
 let read_json_file = common.read_json_file;
@@ -47,6 +48,16 @@ let url_path = runtime_url.path;
 let url_query_params = runtime_url.query_params;
 
 const CONFIG_NAME = "forkop";
+
+function sing_box_uses_legacy_independent_cache(value) {
+    let matched = match(as_string(value), /^v?([0-9]+)[.]([0-9]+)/);
+    if (matched == null)
+        return true;
+
+    let major = int(matched[1], 10);
+    let minor = int(matched[2], 10);
+    return major < 1 || (major == 1 && minor < 14);
+}
 
 function parent_dir(path) {
     path = as_string(path);
@@ -461,7 +472,7 @@ function base_config(settings, service_address, runtime_context) {
     runtime_context.dns_health_inbounds = dns_config.sniff_inbounds;
     runtime_context.default_domain_resolver = runtime_dns.default_domain_resolver(settings);
 
-    return {
+    let result = {
         log: {
             disabled: false,
             level: log_level,
@@ -471,8 +482,7 @@ function base_config(settings, service_address, runtime_context) {
             servers: dns_servers,
             rules: dns_rules,
             final: runtime_constants.DNS_SERVER_TAG,
-            strategy: option(settings, "dns_strategy", "prefer_ipv4"),
-            independent_cache: true
+            strategy: option(settings, "dns_strategy", "prefer_ipv4")
         },
         ntp: {},
         certificate: {},
@@ -493,6 +503,9 @@ function base_config(settings, service_address, runtime_context) {
             clash_api: clash_api_config(settings, service_address)
         }
     };
+    if (sing_box_uses_legacy_independent_cache(runtime_sing_box_version))
+        result.dns.independent_cache = true;
+    return result;
 }
 
 function supported_subscription_outbound(outbound) {
@@ -3005,10 +3018,11 @@ function add_server_routes(config, servers, sections) {
     }
 }
 
-function generate_config(output_path, service_address, mwan3_active, supports_xhttp, deferred_sections) {
+function generate_config(output_path, service_address, mwan3_active, supports_xhttp, deferred_sections, sing_box_version) {
     runtime_supports_xhttp = supports_xhttp == null || as_string(supports_xhttp) == ""
         ? true
         : cli_bool(supports_xhttp);
+    runtime_sing_box_version = as_string(sing_box_version || "");
     let cursor = uci_cursor();
     cursor.load(CONFIG_NAME);
     runtime_settings_cache = object_or_empty(cursor.get_all(CONFIG_NAME, "settings"));
@@ -3048,11 +3062,11 @@ function generate_config(output_path, service_address, mwan3_active, supports_xh
     }
 }
 
-function generate_config_fixture(fixture_path, output_path, service_address, mwan3_active, supports_xhttp, deferred_sections) {
+function generate_config_fixture(fixture_path, output_path, service_address, mwan3_active, supports_xhttp, deferred_sections, sing_box_version) {
     use_fixture_cursor(fixture_path);
     runtime_subscription.set_section_cache_dir(output_path + ".section-cache");
     runtime_ruleset_folder = output_path + ".rulesets";
-    generate_config(output_path, service_address, mwan3_active, supports_xhttp, deferred_sections);
+    generate_config(output_path, service_address, mwan3_active, supports_xhttp, deferred_sections, sing_box_version);
 }
 
 function stdin_length() {
@@ -3166,9 +3180,9 @@ function object_nonempty_stdin() {
 let mode = ARGV[0] || "";
 
 if (mode == "generate-config")
-    generate_config(ARGV[1], ARGV[2], ARGV[3], ARGV[4], ARGV[5] || "");
+    generate_config(ARGV[1], ARGV[2], ARGV[3], ARGV[4], ARGV[5] || "", ARGV[6] || "");
 else if (mode == "generate-config-fixture")
-    generate_config_fixture(ARGV[1], ARGV[2], ARGV[3], ARGV[4], ARGV[5], ARGV[6] || "");
+    generate_config_fixture(ARGV[1], ARGV[2], ARGV[3], ARGV[4], ARGV[5], ARGV[6] || "", ARGV[7] || "");
 else if (mode == "stdin-length")
     stdin_length();
 else if (mode == "stdin-contains")
