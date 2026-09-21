@@ -520,7 +520,7 @@ function supported_subscription_outbound(outbound) {
     if (t == "direct" || t == "selector" || t == "urltest" || t == "dns" || t == "block")
         return false;
     return t == "vless" || t == "vmess" || t == "trojan" || t == "shadowsocks" ||
-        t == "socks" || t == "hysteria2";
+        t == "socks" || t == "hysteria2" || t == "wireguard";
 }
 
 function outbound_uses_xhttp(outbound) {
@@ -740,6 +740,16 @@ function assert_unique_outbound_tags(config) {
             runtime_generate_unsupported("generated sing-box config has duplicate outbound tag '" + tag_name + "'");
         seen[tag_name] = true;
     }
+    for (let ep in array_or_empty(config.endpoints)) {
+        if (type(ep) != "object")
+            continue;
+        let tag_name = as_string(ep.tag || "");
+        if (tag_name == "")
+            runtime_generate_unsupported("generated sing-box endpoint has an empty tag");
+        if (seen[tag_name])
+            runtime_generate_unsupported("generated sing-box config has duplicate tag '" + tag_name + "'");
+        seen[tag_name] = true;
+    }
 }
 
 function add_subscription_source_with_state(config, section, source_index, source_entry, taken, selector_tags, urltest_candidate_tags, state, show_metadata, include_urltest_groups, hide_urltest_group_outbounds, hide_detour_outbounds, node_prefix) {
@@ -819,7 +829,12 @@ function add_subscription_source_with_state(config, section, source_index, sourc
             continue;
         }
 
-        push(config.outbounds, outbound);
+        if (outbound.type == "wireguard") {
+            config.endpoints = config.endpoints || [];
+            push(config.endpoints, normalize_wireguard_endpoint(outbound));
+        } else {
+            push(config.outbounds, outbound);
+        }
         added++;
         if (!is_group)
             push(urltest_candidate_tags, outbound.tag);
@@ -1488,7 +1503,7 @@ function apply_section_detour_to_connection_outbounds(config, start_index, detou
 
 function mixed_proxy_enabled_action(action) {
     return action == "connection" || action == "proxy" || action == "outbound" || action == "vpn" ||
-        action == "byedpi" || action == "zapret" || action == "zapret2";
+        action == "byedpi" || action == "zapret" || action == "zapret2" || action == "udpspeeder";
 }
 
 function add_mixed_proxy_for_section(config, section, service_address) {
@@ -2011,10 +2026,100 @@ function manual_hysteria2_outbound(link, tag_name) {
     return outbound;
 }
 
+function clean_awg_hex(value) {
+    value = as_string(value);
+    let m = match(value, /<b 0x([0-9a-fA-F]+)>/);
+    if (m)
+        return m[1];
+    if (starts_with(value, "0x") || starts_with(value, "0X"))
+        value = substr(value, 2);
+    return replace(value, /[^0-9A-Fa-f]/g, "");
+}
+
+function manual_wireguard_outbound(link, tag_name) {
+    let raw = as_string(link);
+    let tag = url_fragment(raw);
+    if (tag == "")
+        tag = tag_name;
+
+    let stripped = url_strip_fragment_value(raw);
+    let url = parse_url(stripped);
+    if (!url || url.host == "" || url.port == null)
+        runtime_generate_unsupported("manual WireGuard/AmneziaWG proxy link is invalid");
+
+    let query = object_or_empty(url.query);
+    let addresses = split_csv(query.address || query.ip || "10.0.0.2/32");
+    let outbound = {
+        type: "wireguard",
+        tag: tag,
+        server: url.host,
+        server_port: int(url.port),
+        system: false,
+        local_address: addresses,
+        private_key: url.userinfo || query.private_key || query.privatekey || "",
+        peer_public_key: query.public_key || query.publickey || query.peer_public_key || ""
+    };
+
+    let psk = query.preshared_key || query.presharedkey || query.psk || "";
+    if (psk != "")
+        outbound.pre_shared_key = psk;
+    if (query.mtu != null && int(query.mtu) > 0)
+        outbound.mtu = int(query.mtu);
+
+    let amnezia = {};
+    let has_amnezia = false;
+    for (let k in [ "jc", "jmin", "jmax", "s1", "s2", "s3", "s4", "h1", "h2", "h3", "h4" ]) {
+        if (query[k] != null && query[k] != "") {
+            amnezia[k] = int(query[k]);
+            has_amnezia = true;
+        }
+    }
+    for (let k in [ "i1", "i2" ]) {
+        if (query[k] != null && query[k] != "") {
+            amnezia[k] = clean_awg_hex(query[k]);
+            has_amnezia = true;
+        }
+    }
+    let hpk = query.header_protection_key || query.headerprotectionkey || query.hpk || "";
+    if (hpk != "") {
+        amnezia.header_protection_key = hpk;
+        has_amnezia = true;
+    }
+    if (has_amnezia)
+        outbound.amnezia = amnezia;
+
+    return outbound;
+}
+
+function normalize_wireguard_endpoint(endpoint) {
+    if (!length(endpoint.peers) && endpoint.server) {
+        let peer = {
+            address: endpoint.server,
+            port: int(endpoint.server_port || 51820),
+            public_key: endpoint.peer_public_key || endpoint.public_key,
+            allowed_ips: [ "0.0.0.0/0", "::/0" ]
+        };
+        if (endpoint.pre_shared_key)
+            peer.pre_shared_key = endpoint.pre_shared_key;
+        endpoint.peers = [ peer ];
+        delete endpoint.server;
+        delete endpoint.server_port;
+        delete endpoint.peer_public_key;
+        delete endpoint.pre_shared_key;
+    }
+    if (endpoint.local_address && !endpoint.address) {
+        endpoint.address = endpoint.local_address;
+        delete endpoint.local_address;
+    }
+    return endpoint;
+}
+
 function manual_link_outbound(link, tag_name) {
     let scheme = url_scheme(link);
     if (scheme == "vmess")
         return manual_vmess_outbound(link, tag_name);
+    if (scheme == "wireguard" || scheme == "awg")
+        return manual_wireguard_outbound(link, tag_name);
 
     link = url_strip_fragment_value(url_decode(link));
     scheme = url_scheme(link);
@@ -2028,6 +2133,8 @@ function manual_link_outbound(link, tag_name) {
         return manual_trojan_outbound(link, tag_name);
     if (scheme == "hysteria2" || scheme == "hy2")
         return manual_hysteria2_outbound(link, tag_name);
+    if (scheme == "wireguard" || scheme == "awg")
+        return manual_wireguard_outbound(link, tag_name);
     runtime_generate_unsupported("manual proxy link scheme is not supported by sing-box config generation yet");
 }
 
@@ -2042,7 +2149,12 @@ function add_manual_proxy_link(config, state, section_name, manual_index, link, 
     if (display_name == "")
         display_name = tag_name;
     ensure_explicit_outbound_supported(outbound, "manual outbound", display_name);
-    push(config.outbounds, outbound);
+    if (outbound.type == "wireguard") {
+        config.endpoints = config.endpoints || [];
+        push(config.endpoints, normalize_wireguard_endpoint(outbound));
+    } else {
+        push(config.outbounds, outbound);
+    }
     push(selector_tags, tag_name);
     push(urltest_candidate_tags, tag_name);
 
@@ -2213,7 +2325,12 @@ function add_connection_json_outbounds(config, state, section, taken, selector_t
     for (let item in prepare_json_connection_outbounds(section, taken)) {
         let outbound = item.outbound;
         let tag_name = outbound.tag;
-        push(config.outbounds, outbound);
+        if (outbound.type == "wireguard") {
+            config.endpoints = config.endpoints || [];
+            push(config.endpoints, normalize_wireguard_endpoint(outbound));
+        } else {
+            push(config.outbounds, outbound);
+        }
         push(selector_tags, tag_name);
         if (urltest_leaf_candidate_outbound(outbound))
             push(urltest_candidate_tags, tag_name);
@@ -2304,6 +2421,13 @@ function add_byedpi_outbound(config, section, sections) {
         server: runtime_constants.BYEDPI_LISTEN_ADDRESS,
         server_port: runtime_constants.BYEDPI_PORT_BASE + index - 1,
         version: "5"
+    });
+}
+
+function add_udpspeeder_outbound(config, section, sections) {
+    push(config.outbounds, {
+        type: "direct",
+        tag: outbound_tag(section[".name"])
     });
 }
 
@@ -2908,6 +3032,8 @@ function add_outbound_for_section(config, section, taken, sections) {
         add_zapret2_outbound(config, section, sections);
     else if (action == "byedpi")
         add_byedpi_outbound(config, section, sections);
+    else if (action == "udpspeeder")
+        add_udpspeeder_outbound(config, section, sections);
     else if (action == "bypass") {
         /* route-only action */
     }
@@ -2926,7 +3052,7 @@ function reserve_section_outbound_tags(sections, taken) {
     for (let section in sections) {
         let action = option(section, "action", "");
         if (connections.is_connections_action(action) ||
-            action == "byedpi" || action == "zapret" || action == "zapret2")
+            action == "byedpi" || action == "zapret" || action == "zapret2" || action == "udpspeeder")
             taken[outbound_tag(section[".name"])] = true;
 
         if (!connections.is_connections_action(action))
@@ -2951,7 +3077,7 @@ function add_service_route_rules(config, sections) {
     for (let section in sections) {
         let action = option(section, "action", "");
         if (connections.is_connections_action(action) ||
-            action == "byedpi" || action == "zapret" || action == "zapret2") {
+            action == "byedpi" || action == "zapret" || action == "zapret2" || action == "udpspeeder") {
             first = section;
             break;
         }

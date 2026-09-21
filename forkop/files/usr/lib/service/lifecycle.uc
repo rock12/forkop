@@ -109,6 +109,7 @@ const DIAGNOSTICS_UC = LIB_DIR + "/diagnostics/runtime.uc";
 const ZAPRET_UC = LIB_DIR + "/providers/zapret/runtime.uc";
 const ZAPRET2_UC = LIB_DIR + "/providers/zapret2/runtime.uc";
 const BYEDPI_UC = LIB_DIR + "/providers/byedpi/runtime.uc";
+const UDPSPEEDER_UC = LIB_DIR + "/providers/udpspeeder/runtime.uc";
 const PACKAGES_UC = LIB_DIR + "/core/packages.uc";
 
 let start_subscription_update_lock_held = false;
@@ -715,6 +716,7 @@ function start_main() {
         return status;
 
     module_success(BYEDPI_UC, [ "start-runtime" ]);
+    module_success(UDPSPEEDER_UC, [ "start-runtime" ]);
 
     if (!command_success_from_args([ "/etc/init.d/sing-box", "start" ])) {
         log_message("Failed to start sing-box. Aborted.", "fatal");
@@ -808,6 +810,7 @@ function stop_main() {
     module_success(ZAPRET_UC, [ "stop-runtime" ]);
     module_success(ZAPRET2_UC, [ "stop-runtime" ]);
     module_success(BYEDPI_UC, [ "stop-runtime" ]);
+    module_success(UDPSPEEDER_UC, [ "stop-runtime" ]);
 
     if (command_success_from_args([ "nft", "list", "table", "inet", NFT_TABLE_NAME ]))
         command_success_from_args([ "nft", "delete", "table", "inet", NFT_TABLE_NAME ]);
@@ -982,6 +985,7 @@ function parse_reload_plan(output) {
         changed_zapret2_queue: 0,
         changed_zapret2_runtime: 0,
         changed_byedpi_runtime: 0,
+        changed_udpspeeder_runtime: 0,
         changed_cron: 0,
         changed_list: 0,
         needs_sing_box_reload: 0,
@@ -989,6 +993,7 @@ function parse_reload_plan(output) {
         needs_zapret_restart: 0,
         needs_zapret2_restart: 0,
         needs_byedpi_restart: 0,
+        needs_udpspeeder_restart: 0,
         needs_dnsmasq_configure: 0,
         needs_dnsmasq_restore: 0,
         needs_cron_refresh: 0,
@@ -1024,6 +1029,7 @@ function reload_actions_summary(plan) {
     actions = append_reload_action(actions, plan.needs_zapret_restart, "Zapret");
     actions = append_reload_action(actions, plan.needs_zapret2_restart, "Zapret2");
     actions = append_reload_action(actions, plan.needs_byedpi_restart, "ByeDPI");
+    actions = append_reload_action(actions, plan.needs_udpspeeder_restart, "UDPspeeder");
     actions = append_reload_action(actions, plan.needs_dnsmasq_configure || plan.needs_dnsmasq_restore, "dnsmasq");
     actions = append_reload_action(actions, plan.needs_cron_refresh, "scheduled jobs");
     actions = append_reload_action(actions, plan.needs_list_update, "remote lists");
@@ -1205,6 +1211,8 @@ function reload(reason) {
         module_success(ZAPRET2_UC, [ "stop-runtime" ]);
     if (plan.needs_byedpi_restart == 1)
         module_success(BYEDPI_UC, [ "stop-runtime" ]);
+    if (plan.needs_udpspeeder_restart == 1)
+        module_success(UDPSPEEDER_UC, [ "stop-runtime" ]);
 
     if (plan.needs_nft_rebuild == 1) {
         log_message("Rebuilding nftables rules", "info");
@@ -1275,6 +1283,8 @@ function reload(reason) {
         module_success(ZAPRET2_UC, [ "start-runtime" ]);
     if (plan.needs_byedpi_restart == 1)
         module_success(BYEDPI_UC, [ "start-runtime" ]);
+    if (plan.needs_udpspeeder_restart == 1)
+        module_success(UDPSPEEDER_UC, [ "start-runtime" ]);
 
     if (plan.needs_dnsmasq_configure == 1) {
         status = dnsmasq_configure(true);

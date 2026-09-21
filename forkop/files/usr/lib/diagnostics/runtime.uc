@@ -55,6 +55,7 @@ const SINGBOX_RUNTIME_UC = LIB_DIR + "/singbox/runtime.uc";
 const ZAPRET_RUNTIME_UC = LIB_DIR + "/providers/zapret/runtime.uc";
 const ZAPRET2_RUNTIME_UC = LIB_DIR + "/providers/zapret2/runtime.uc";
 const BYEDPI_RUNTIME_UC = LIB_DIR + "/providers/byedpi/runtime.uc";
+const UDPSPEEDER_RUNTIME_UC = LIB_DIR + "/providers/udpspeeder/runtime.uc";
 const ZAPRET_VALIDATOR_UC = LIB_DIR + "/providers/zapret/validator.uc";
 const ZAPRET2_VALIDATOR_UC = LIB_DIR + "/providers/zapret2/validator.uc";
 
@@ -1932,6 +1933,8 @@ else if (mode == "check-zapret2-runtime")
     exit(module_passthrough(ZAPRET2_RUNTIME_UC, [ "check" ]));
 else if (mode == "check-byedpi-runtime")
     exit(module_passthrough(BYEDPI_RUNTIME_UC, [ "check" ]));
+else if (mode == "check-udpspeeder-runtime")
+    exit(module_passthrough(UDPSPEEDER_RUNTIME_UC, [ "check" ]));
 else if (mode == "neutralize-zapret-defaults")
     exit(neutralize_zapret_defaults());
 else if (mode == "clash-api")
@@ -1958,6 +1961,8 @@ else if (mode == "get-zapret2-status")
     exit(module_passthrough(ZAPRET2_RUNTIME_UC, [ "status" ]));
 else if (mode == "get-byedpi-status")
     exit(module_passthrough(BYEDPI_RUNTIME_UC, [ "status" ]));
+else if (mode == "get-udpspeeder-status")
+    exit(module_passthrough(UDPSPEEDER_RUNTIME_UC, [ "status" ]));
 else if (mode == "get-system-info")
     exit(get_system_info());
 else if (mode == "get-server-capabilities")

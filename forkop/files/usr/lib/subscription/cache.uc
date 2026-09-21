@@ -32,6 +32,7 @@ const SB_VERSION_STATE_FILE = getenv("SB_VERSION_STATE_FILE") || "/etc/forkop/si
 const ZAPRET_PROVIDER_NFQWS_BIN = getenv("ZAPRET_PROVIDER_NFQWS_BIN") || "/opt/zapret/nfq/nfqws";
 const ZAPRET2_PROVIDER_NFQWS2_BIN = getenv("ZAPRET2_PROVIDER_NFQWS2_BIN") || "/opt/zapret2/nfq2/nfqws2";
 const BYEDPI_BIN = getenv("BYEDPI_BIN") || "/usr/bin/ciadpi";
+const UDPSPEEDER_BIN = getenv("UDPSPEEDER_BIN") || "/usr/bin/udpspeeder";
 
 function as_string(value) {
     return value == null ? "" : "" + value;
@@ -846,6 +847,8 @@ function sing_box_service_running() {
 function provider_action_is_available(action) {
     if (action == "byedpi")
         return file_executable(BYEDPI_BIN);
+    if (action == "udpspeeder")
+        return file_executable(UDPSPEEDER_BIN);
     if (action == "zapret")
         return file_executable(ZAPRET_PROVIDER_NFQWS_BIN);
     if (action == "zapret2")

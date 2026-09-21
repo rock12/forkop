@@ -83,6 +83,7 @@ function show_help() {
     print("    check_zapret_runtime    Check external zapret provider state\n");
     print("    check_zapret2_runtime   Check external zapret2 provider state\n");
     print("    check_byedpi_runtime    Check external ByeDPI provider state\n");
+    print("    check_udpspeeder_runtime Check external UDPspeeder provider state\n");
     print("    neutralize_zapret_defaults\n");
     print("                            Compatibility no-op; Forkop does not manage standalone zapret\n");
     print("    clash_api               Clash API interface for managing proxies and groups\n");
@@ -98,6 +99,7 @@ function show_help() {
     print("    get_zapret_status       Get zapret provider and Forkop-managed nfqws status\n");
     print("    get_zapret2_status      Get zapret2 provider and Forkop-managed nfqws2 status\n");
     print("    get_byedpi_status       Get ByeDPI provider and Forkop-managed ciadpi status\n");
+    print("    get_udpspeeder_status   Get UDPspeeder provider and Forkop-managed udpspeeder status\n");
     print("    get_system_info         Get system information in JSON format\n");
     print("    get_server_capabilities Get server UI capabilities in JSON format\n");
     print("    get_ui_capabilities     Get lightweight UI capabilities in JSON format\n");
@@ -157,6 +159,7 @@ function command_spec(command) {
         check_zapret_runtime: [ "diagnostics/runtime.uc", "check-zapret-runtime", 0 ],
         check_zapret2_runtime: [ "diagnostics/runtime.uc", "check-zapret2-runtime", 0 ],
         check_byedpi_runtime: [ "diagnostics/runtime.uc", "check-byedpi-runtime", 0 ],
+        check_udpspeeder_runtime: [ "diagnostics/runtime.uc", "check-udpspeeder-runtime", 0 ],
         neutralize_zapret_defaults: [ "diagnostics/runtime.uc", "neutralize-zapret-defaults", 0 ],
         clash_api: [ "diagnostics/runtime.uc", "clash-api", 4 ],
         show_config: [ "diagnostics/runtime.uc", "show-config", 1 ],
@@ -170,6 +173,7 @@ function command_spec(command) {
         get_zapret_status: [ "diagnostics/runtime.uc", "get-zapret-status", 0 ],
         get_zapret2_status: [ "diagnostics/runtime.uc", "get-zapret2-status", 0 ],
         get_byedpi_status: [ "diagnostics/runtime.uc", "get-byedpi-status", 0 ],
+        get_udpspeeder_status: [ "diagnostics/runtime.uc", "get-udpspeeder-status", 0 ],
         get_system_info: [ "diagnostics/runtime.uc", "get-system-info", 0 ],
         get_server_capabilities: [ "diagnostics/runtime.uc", "get-server-capabilities", 0 ],
         get_ui_capabilities: [ "service/ui.uc", "get-ui-capabilities", 0 ],

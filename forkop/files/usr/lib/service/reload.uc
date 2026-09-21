@@ -64,6 +64,7 @@ function emit_reload_plan(previous, current, context) {
         zapret2_queue: current.zapret2_queue != previous.zapret2_queue,
         zapret2_runtime: current.zapret2_runtime != previous.zapret2_runtime,
         byedpi_runtime: current.byedpi_runtime != previous.byedpi_runtime,
+        udpspeeder_runtime: current.udpspeeder_runtime != previous.udpspeeder_runtime,
         list: current.list != previous.list,
         cron: current.cron != previous.cron
     };
@@ -74,6 +75,7 @@ function emit_reload_plan(previous, current, context) {
         zapret_restart: false,
         zapret2_restart: false,
         byedpi_restart: false,
+        udpspeeder_restart: false,
         dnsmasq_configure: false,
         dnsmasq_restore: false,
         cron_refresh: false,
@@ -107,6 +109,9 @@ function emit_reload_plan(previous, current, context) {
     if (changed.byedpi_runtime)
         needs.byedpi_restart = true;
 
+    if (changed.udpspeeder_runtime)
+        needs.udpspeeder_restart = true;
+
     if (changed.dnsmasq) {
         if (!current.dont_touch_dhcp)
             needs.dnsmasq_configure = true;
@@ -134,6 +139,7 @@ function emit_reload_plan(previous, current, context) {
         !needs.zapret_restart &&
         !needs.zapret2_restart &&
         !needs.byedpi_restart &&
+        !needs.udpspeeder_restart &&
         !needs.dnsmasq_configure &&
         !needs.dnsmasq_restore)
         needs.sing_box_reload = true;
@@ -144,6 +150,7 @@ function emit_reload_plan(previous, current, context) {
         needs.zapret_restart ||
         needs.zapret2_restart ||
         needs.byedpi_restart ||
+        needs.udpspeeder_restart ||
         needs.dnsmasq_configure ||
         needs.dnsmasq_restore ||
         needs.cron_refresh ||
@@ -164,6 +171,7 @@ function emit_reload_plan(previous, current, context) {
     emit_bool("changed_zapret2_queue", changed.zapret2_queue);
     emit_bool("changed_zapret2_runtime", changed.zapret2_runtime);
     emit_bool("changed_byedpi_runtime", changed.byedpi_runtime);
+    emit_bool("changed_udpspeeder_runtime", changed.udpspeeder_runtime);
     emit_bool("changed_cron", changed.cron);
     emit_bool("changed_list", changed.list);
 
@@ -172,6 +180,7 @@ function emit_reload_plan(previous, current, context) {
     emit_bool("needs_zapret_restart", needs.zapret_restart);
     emit_bool("needs_zapret2_restart", needs.zapret2_restart);
     emit_bool("needs_byedpi_restart", needs.byedpi_restart);
+    emit_bool("needs_udpspeeder_restart", needs.udpspeeder_restart);
     emit_bool("needs_dnsmasq_configure", needs.dnsmasq_configure);
     emit_bool("needs_dnsmasq_restore", needs.dnsmasq_restore);
     emit_bool("needs_cron_refresh", needs.cron_refresh);
@@ -264,6 +273,7 @@ function plan_state_from_file(path) {
         zapret2_queue: as_string(state.zapret2_queue_signature),
         zapret2_runtime: as_string(state.zapret2_runtime_signature),
         byedpi_runtime: as_string(state.byedpi_runtime_signature),
+        udpspeeder_runtime: as_string(state.udpspeeder_runtime_signature),
         list: as_string(state.list_signature),
         cron: as_string(state.cron_signature),
         urltest_sections_known: state.__has.urltest_enabled_sections === true,

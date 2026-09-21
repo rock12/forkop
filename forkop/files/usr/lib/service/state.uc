@@ -170,6 +170,7 @@ const RELOAD_STATE_FIELDS = [
     "zapret2_queue_signature",
     "zapret2_runtime_signature",
     "byedpi_runtime_signature",
+    "udpspeeder_runtime_signature",
     "list_signature",
     "cron_signature",
     "urltest_enabled_sections",
@@ -1553,6 +1554,28 @@ function byedpi_runtime_signature_body(sections) {
     return body;
 }
 
+function udpspeeder_runtime_signature_body(sections) {
+    let body = "";
+
+    for (let section in sections) {
+        section = object_or_empty(section);
+        if (!section_action_is_enabled(section, "udpspeeder"))
+            continue;
+
+        let name = section_name(section);
+        body = signature_add_value(body, "udpspeeder." + name + ".server", option(section, "udpspeeder_server", ""));
+        body = signature_add_value(body, "udpspeeder." + name + ".server_port", option(section, "udpspeeder_server_port", ""));
+        body = signature_add_value(body, "udpspeeder." + name + ".local_port", option(section, "udpspeeder_local_port", ""));
+        body = signature_add_value(body, "udpspeeder." + name + ".key", option(section, "udpspeeder_key", ""));
+        body = signature_add_value(body, "udpspeeder." + name + ".mode", option(section, "udpspeeder_mode", "0"));
+        body = signature_add_value(body, "udpspeeder." + name + ".fec", option(section, "udpspeeder_fec", "20:10"));
+        body = signature_add_value(body, "udpspeeder." + name + ".mtu", option(section, "udpspeeder_mtu", "1250"));
+        body = signature_add_value(body, "udpspeeder." + name + ".extra_opts", option(section, "udpspeeder_extra_opts", ""));
+    }
+
+    return body;
+}
+
 function reload_state_values_from_sources(format, settings, sections, servers, dnsmasq, legacy_dnsmasq_present, mwan3_active_value) {
     return {
         format: as_string(format),
@@ -1565,6 +1588,7 @@ function reload_state_values_from_sources(format, settings, sections, servers, d
         zapret2_queue_signature: signature_hash(action_queue_signature_body(sections, "zapret2", "zapret2_queue.section")),
         zapret2_runtime_signature: signature_hash(zapret2_runtime_signature_body(sections)),
         byedpi_runtime_signature: signature_hash(byedpi_runtime_signature_body(sections)),
+        udpspeeder_runtime_signature: signature_hash(udpspeeder_runtime_signature_body(sections)),
         list_signature: signature_hash(list_update_signature_body(sections)),
         cron_signature: signature_hash(cron_signature_body(settings, sections)),
         urltest_enabled_sections: urltest_enabled_sections_value(sections),

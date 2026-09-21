@@ -23,6 +23,7 @@ const ROUTING_ACTIONS = [
   "zapret",
   "zapret2",
   "byedpi",
+  "udpspeeder",
 ];
 const CONNECTIONS_BLOCKED_INTERFACES = [
   "br-lan",
@@ -130,7 +131,13 @@ function isDnsDetourTargetSection(section, currentSectionId) {
   if (action === "zapret2") {
     return isZapret2InstalledForUi();
   }
-  return action === "byedpi" && isByedpiInstalledForUi();
+  if (action === "byedpi") {
+    return isByedpiInstalledForUi();
+  }
+  if (action === "udpspeeder") {
+    return isUdpspeederInstalledForUi();
+  }
+  return false;
 }
 
 function refreshDnsDetourSectionOptionValues(option, sectionId) {
@@ -445,6 +452,7 @@ const actionProvidersAvailabilityState = {
   zapretInstalled: false,
   zapret2Installed: false,
   byedpiInstalled: false,
+  udpspeederInstalled: false,
 };
 let actionProvidersAvailabilityPromise = null;
 let actionProvidersAvailabilityLoader = null;
@@ -488,6 +496,12 @@ function updateActionProvidersAvailabilityState(nextState) {
     );
   }
 
+  if (typeof nextState.udpspeederInstalled !== "undefined") {
+    actionProvidersAvailabilityState.udpspeederInstalled = Boolean(
+      nextState.udpspeederInstalled,
+    );
+  }
+
   actionProvidersAvailabilityPromise = null;
 }
 
@@ -500,6 +514,7 @@ function updateActionProvidersAvailabilityFromSystemInfo(systemInfo) {
     zapretInstalled: Boolean(systemInfo.zapret_installed),
     zapret2Installed: Boolean(systemInfo.zapret2_installed),
     byedpiInstalled: Boolean(systemInfo.byedpi_installed),
+    udpspeederInstalled: Boolean(systemInfo.udpspeeder_installed),
   });
 }
 
@@ -1746,6 +1761,10 @@ function isDownloadThroughTargetSection(section, currentSectionId) {
 
   if (action === "byedpi") {
     return isByedpiInstalledForUi();
+  }
+
+  if (action === "udpspeeder") {
+    return isUdpspeederInstalledForUi();
   }
 
   return false;
@@ -3890,7 +3909,497 @@ function validateOutboundJsonItemsBeforeSave(_section_id, values) {
     tags.push(tag);
   }
 
-  return true;
+function cleanAwgHex(val) {
+  if (!val) return "";
+  let s = `${val}`.trim();
+  const m = s.match(/0x([0-9a-fA-F]+)/i);
+  if (m) return m[1].toLowerCase();
+  s = s.replace(/^[<b\s]+|[>]+$/gi, "").trim();
+  if (/^[0-9a-fA-F]+$/.test(s)) return s.toLowerCase();
+  return s;
+}
+
+function parseAwgIni(text) {
+  const lines = text.split(/\r?\n/);
+  let currentSection = "";
+  const iface = {};
+  const peer = {};
+
+  for (let line of lines) {
+    line = line.trim();
+    if (!line || line.startsWith("#") || line.startsWith(";")) continue;
+    const secMatch = line.match(/^\[(\w+)\]$/);
+    if (secMatch) {
+      currentSection = secMatch[1].toLowerCase();
+      continue;
+    }
+    const eqIdx = line.indexOf("=");
+    if (eqIdx <= 0) continue;
+    const key = line.slice(0, eqIdx).trim().toLowerCase();
+    const val = line.slice(eqIdx + 1).trim();
+
+    if (currentSection === "interface") {
+      iface[key] = val;
+    } else if (currentSection === "peer") {
+      peer[key] = val;
+    }
+  }
+
+  const addresses = [];
+  if (iface.address) {
+    iface.address.split(",").forEach((a) => {
+      const trimmed = a.trim();
+      if (trimmed) addresses.push(trimmed.includes("/") ? trimmed : `${trimmed}/32`);
+    });
+  }
+
+  let server = "";
+  let port = 51820;
+  if (peer.endpoint) {
+    const ep = peer.endpoint.trim();
+    if (ep.startsWith("[")) {
+      const end = ep.indexOf("]");
+      server = ep.slice(1, end);
+      port = parseInt(ep.slice(end + 2), 10) || 51820;
+    } else {
+      const parts = ep.split(":");
+      server = parts[0];
+      port = parseInt(parts[1], 10) || 51820;
+    }
+  }
+
+  const result = {
+    type: "wireguard",
+    tag: "awg-out",
+    server: server,
+    server_port: port,
+    local_address: addresses,
+    private_key: iface.privatekey || "",
+    peer_public_key: peer.publickey || "",
+  };
+  if (peer.presharedkey) result.pre_shared_key = peer.presharedkey;
+  if (iface.mtu) result.mtu = parseInt(iface.mtu, 10);
+
+  const awg = {};
+  if (iface.jc) awg.jc = parseInt(iface.jc, 10);
+  if (iface.jmin) awg.jmin = parseInt(iface.jmin, 10);
+  if (iface.jmax) awg.jmax = parseInt(iface.jmax, 10);
+  ["s1", "s2", "s3", "s4"].forEach((k) => {
+    if (typeof iface[k] !== "undefined" && iface[k] !== "") awg[k] = parseInt(iface[k], 10);
+  });
+  ["h1", "h2", "h3", "h4"].forEach((k) => {
+    if (typeof iface[k] !== "undefined" && iface[k] !== "") awg[k] = parseInt(iface[k], 10);
+  });
+  if (iface.i1) awg.i1 = cleanAwgHex(iface.i1);
+  if (iface.i2) awg.i2 = cleanAwgHex(iface.i2);
+  if (iface.headerprotectionkey) awg.header_protection_key = iface.headerprotectionkey;
+
+  if (Object.keys(awg).length > 0) {
+    result.amnezia = awg;
+  }
+
+  return result;
+}
+
+async function decompressVpnLink(vpnLink) {
+  let base64 = vpnLink.replace(/^vpn:\/\//i, "").trim();
+  base64 = base64.replace(/-/g, "+").replace(/_/g, "/");
+  while (base64.length % 4 !== 0) base64 += "=";
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+  for (const offset of [4, 0, 6, 2]) {
+    if (offset >= bytes.length) continue;
+    try {
+      const slice = bytes.slice(offset);
+      const ds = new DecompressionStream("deflate");
+      const writer = ds.writable.getWriter();
+      writer.write(slice);
+      writer.close();
+      const reader = ds.readable.getReader();
+      const chunks = [];
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+      }
+      const totalLen = chunks.reduce((acc, c) => acc + c.length, 0);
+      const out = new Uint8Array(totalLen);
+      let pos = 0;
+      for (const c of chunks) {
+        out.set(c, pos);
+        pos += c.length;
+      }
+      const text = new TextDecoder().decode(out);
+      if (text.includes("containers") || text.includes("config") || text.includes("awg")) {
+        return JSON.parse(text);
+      }
+    } catch (_e) {
+      // try next offset
+    }
+  }
+  return null;
+}
+
+async function parseAmneziaOrWgInput(input) {
+  let trimmed = `${input || ""}`.trim();
+  if (trimmed.startsWith("vpn://")) {
+    const decomp = await decompressVpnLink(trimmed);
+    if (!decomp) throw new Error(_("Failed to decompress Amnezia vpn:// link"));
+    let awgContainer = (decomp.containers || []).find((c) => c.container && c.container.includes("awg")) || (decomp.containers || [])[0];
+    let awgData = awgContainer ? awgContainer.awg : null;
+    let configStr = "";
+    if (awgData && awgData.last_config) {
+      try {
+        const lastCfg = typeof awgData.last_config === "string" ? JSON.parse(awgData.last_config) : awgData.last_config;
+        if (lastCfg.config) configStr = lastCfg.config;
+      } catch (_e) {
+        configStr = awgData.last_config;
+      }
+    } else if (awgData && awgData.config) {
+      configStr = awgData.config;
+    }
+    if (configStr && configStr.includes("[Interface]")) {
+      const parsed = parseAwgIni(configStr);
+      if (decomp.description) parsed.tag = decomp.description.replace(/[^a-zA-Z0-9_-]/g, "_");
+      return parsed;
+    }
+    if (awgData) {
+      const lastCfg = typeof awgData.last_config === "object" ? awgData.last_config : {};
+      const res = {
+        type: "wireguard",
+        tag: (decomp.description || "amneziawg").replace(/[^a-zA-Z0-9_-]/g, "_"),
+        server: lastCfg.hostName || decomp.hostName || "",
+        server_port: parseInt(lastCfg.port || awgData.port || 51820, 10),
+        local_address: lastCfg.client_ip ? [lastCfg.client_ip.includes("/") ? lastCfg.client_ip : `${lastCfg.client_ip}/32`] : [],
+        private_key: lastCfg.client_priv_key || "",
+        peer_public_key: lastCfg.server_pub_key || "",
+        pre_shared_key: lastCfg.psk_key || "",
+        mtu: parseInt(lastCfg.mtu || "1280", 10),
+        amnezia: {
+          jc: parseInt(awgData.Jc || lastCfg.Jc || "0", 10),
+          jmin: parseInt(awgData.Jmin || lastCfg.Jmin || "0", 10),
+          jmax: parseInt(awgData.Jmax || lastCfg.Jmax || "0", 10),
+          s1: parseInt(awgData.S1 || lastCfg.S1 || "0", 10),
+          s2: parseInt(awgData.S2 || lastCfg.S2 || "0", 10),
+          s3: parseInt(awgData.S3 || lastCfg.S3 || "0", 10),
+          s4: parseInt(awgData.S4 || lastCfg.S4 || "0", 10),
+          h1: parseInt(awgData.H1 || lastCfg.H1 || "0", 10),
+          h2: parseInt(awgData.H2 || lastCfg.H2 || "0", 10),
+          h3: parseInt(awgData.H3 || lastCfg.H3 || "0", 10),
+          h4: parseInt(awgData.H4 || lastCfg.H4 || "0", 10),
+          i1: cleanAwgHex(awgData.I1 || lastCfg.I1),
+          i2: cleanAwgHex(awgData.I2 || lastCfg.I2),
+          header_protection_key: awgData.HeaderProtectionKey || lastCfg.HeaderProtectionKey || undefined,
+        },
+      };
+      return res;
+    }
+  }
+
+  if (trimmed.includes("[Interface]")) {
+    return parseAwgIni(trimmed);
+  }
+
+  if (trimmed.startsWith("wireguard://") || trimmed.startsWith("awg://")) {
+    const url = new URL(trimmed.replace(/^awg:\/\//, "wireguard://"));
+    const search = url.searchParams;
+    const res = {
+      type: "wireguard",
+      tag: decodeURIComponent(url.hash ? url.hash.slice(1) : "wireguard"),
+      server: url.hostname,
+      server_port: parseInt(url.port || "51820", 10),
+      local_address: search.get("address") ? search.get("address").split(",") : [],
+      private_key: decodeURIComponent(url.username || ""),
+      peer_public_key: search.get("publickey") || "",
+      pre_shared_key: search.get("presharedkey") || undefined,
+      mtu: search.get("mtu") ? parseInt(search.get("mtu"), 10) : undefined,
+    };
+    const awg = {};
+    ["jc", "jmin", "jmax", "s1", "s2", "s3", "s4", "h1", "h2", "h3", "h4"].forEach((k) => {
+      if (search.get(k)) awg[k] = parseInt(search.get(k), 10);
+    });
+    if (search.get("i1")) awg.i1 = cleanAwgHex(search.get("i1"));
+    if (search.get("i2")) awg.i2 = cleanAwgHex(search.get("i2"));
+    if (search.get("headerprotectionkey")) awg.header_protection_key = search.get("headerprotectionkey");
+    if (Object.keys(awg).length > 0) res.amnezia = awg;
+    return res;
+  }
+
+  if (trimmed.startsWith("{")) {
+    const parsed = JSON.parse(trimmed);
+    if (parsed.type === "wireguard" || parsed.server) {
+      return parsed;
+    }
+  }
+
+  throw new Error(_("Unrecognized format. Please upload a .conf file, or paste .conf text, or paste a vpn:// link."));
+}
+
+function showAmneziaWgImportModal(section_id) {
+  let parsedResult = null;
+
+  const content = E("div", { class: "fkp-awg-modal" }, [
+    E("p", { style: "margin-bottom:10px;color:#555;" },
+      _("Supports AmneziaWG (AWG 1.0, 2.0, 3.1) and WireGuard. Upload a .conf file or paste configuration text / vpn:// link below:")
+    ),
+    E("div", { style: "margin-bottom:10px;" }, [
+      E("label", { style: "display:block;font-weight:bold;margin-bottom:4px;" }, _("Upload .conf File:")),
+      E("input", {
+        type: "file",
+        id: "fkp-awg-file-input",
+        accept: ".conf,.ini,.txt",
+        class: "cbi-input-file",
+        change: function (ev) {
+          const file = ev.target.files[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = async function (e) {
+            const text = e.target.result;
+            const inputEl = document.getElementById("fkp-awg-raw-input");
+            if (inputEl) inputEl.value = text;
+            await doParse(text);
+          };
+          reader.readAsText(file);
+        },
+      }),
+    ]),
+    E("div", { style: "margin-bottom:12px;" }, [
+      E("label", { style: "display:block;font-weight:bold;margin-bottom:4px;" }, _("Or Paste Config / vpn:// Link:")),
+      E("textarea", {
+        id: "fkp-awg-raw-input",
+        class: "cbi-input-textarea",
+        rows: 4,
+        style: "width:100%;font-family:monospace;font-size:12px;",
+        placeholder: "[Interface]\nPrivateKey = ...\nAddress = ...\n...\n[Peer]\nPublicKey = ...\nEndpoint = ...\n(Or paste vpn:// link)",
+        input: async function (ev) {
+          const val = ev.target.value.trim();
+          if (val.length > 25) {
+            await doParse(val);
+          }
+        },
+      }),
+      E("div", { style: "margin-top:6px;" }, [
+        E("button", {
+          type: "button",
+          class: "cbi-button cbi-button-action",
+          click: async function () {
+            const val = document.getElementById("fkp-awg-raw-input").value;
+            await doParse(val);
+          },
+        }, _("Decode & Fill Form")),
+      ]),
+    ]),
+    E("div", { id: "fkp-awg-review-area", style: "display:none;border-top:1px solid #ccc;padding-top:10px;margin-top:10px;" }, [
+      E("h4", { style: "margin-top:0;color:#0073e6;" }, _("Configuration Review")),
+      E("div", { style: "display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;" }, [
+        E("div", {}, [
+          E("label", { style: "display:block;font-size:11px;font-weight:bold;" }, _("Tag / Name")),
+          E("input", { type: "text", id: "fkp-awg-tag", class: "cbi-input-text", style: "width:100%;" }),
+        ]),
+        E("div", {}, [
+          E("label", { style: "display:block;font-size:11px;font-weight:bold;" }, _("Server Endpoint (Host:Port)")),
+          E("input", { type: "text", id: "fkp-awg-endpoint", class: "cbi-input-text", style: "width:100%;" }),
+        ]),
+        E("div", {}, [
+          E("label", { style: "display:block;font-size:11px;font-weight:bold;" }, _("Client Address(es)")),
+          E("input", { type: "text", id: "fkp-awg-address", class: "cbi-input-text", style: "width:100%;" }),
+        ]),
+        E("div", {}, [
+          E("label", { style: "display:block;font-size:11px;font-weight:bold;" }, _("MTU")),
+          E("input", { type: "number", id: "fkp-awg-mtu", class: "cbi-input-text", style: "width:100%;" }),
+        ]),
+      ]),
+      E("div", { style: "margin-bottom:8px;" }, [
+        E("label", { style: "display:block;font-size:11px;font-weight:bold;" }, _("Private Key")),
+        E("input", { type: "text", id: "fkp-awg-privkey", class: "cbi-input-text", style: "width:100%;font-family:monospace;" }),
+      ]),
+      E("div", { style: "margin-bottom:8px;" }, [
+        E("label", { style: "display:block;font-size:11px;font-weight:bold;" }, _("Peer Public Key")),
+        E("input", { type: "text", id: "fkp-awg-pubkey", class: "cbi-input-text", style: "width:100%;font-family:monospace;" }),
+      ]),
+      E("div", { style: "margin-bottom:8px;" }, [
+        E("label", { style: "display:block;font-size:11px;font-weight:bold;" }, _("Pre-shared Key (Optional)")),
+        E("input", { type: "text", id: "fkp-awg-psk", class: "cbi-input-text", style: "width:100%;font-family:monospace;" }),
+      ]),
+      E("details", { id: "fkp-awg-amnezia-details", style: "margin-bottom:10px;background:#f8f9fa;padding:8px;border-radius:4px;border:1px solid #e9ecef;" }, [
+        E("summary", { style: "cursor:pointer;font-weight:bold;color:#0073e6;" }, _("Amnezia Obfuscation Parameters (AWG 1.0, 2.0, 3.1)")),
+        E("div", { style: "display:grid;grid-template-columns:repeat(3, 1fr);gap:6px;margin-top:8px;" }, [
+          E("div", {}, [E("label", { style: "font-size:10px;" }, "Jc"), E("input", { type: "number", id: "fkp-awg-jc", class: "cbi-input-text", style: "width:100%;" })]),
+          E("div", {}, [E("label", { style: "font-size:10px;" }, "Jmin"), E("input", { type: "number", id: "fkp-awg-jmin", class: "cbi-input-text", style: "width:100%;" })]),
+          E("div", {}, [E("label", { style: "font-size:10px;" }, "Jmax"), E("input", { type: "number", id: "fkp-awg-jmax", class: "cbi-input-text", style: "width:100%;" })]),
+          E("div", {}, [E("label", { style: "font-size:10px;" }, "S1"), E("input", { type: "number", id: "fkp-awg-s1", class: "cbi-input-text", style: "width:100%;" })]),
+          E("div", {}, [E("label", { style: "font-size:10px;" }, "S2"), E("input", { type: "number", id: "fkp-awg-s2", class: "cbi-input-text", style: "width:100%;" })]),
+          E("div", {}, [E("label", { style: "font-size:10px;" }, "S3"), E("input", { type: "number", id: "fkp-awg-s3", class: "cbi-input-text", style: "width:100%;" })]),
+          E("div", {}, [E("label", { style: "font-size:10px;" }, "S4"), E("input", { type: "number", id: "fkp-awg-s4", class: "cbi-input-text", style: "width:100%;" })]),
+          E("div", {}, [E("label", { style: "font-size:10px;" }, "H1"), E("input", { type: "number", id: "fkp-awg-h1", class: "cbi-input-text", style: "width:100%;" })]),
+          E("div", {}, [E("label", { style: "font-size:10px;" }, "H2"), E("input", { type: "number", id: "fkp-awg-h2", class: "cbi-input-text", style: "width:100%;" })]),
+          E("div", {}, [E("label", { style: "font-size:10px;" }, "H3"), E("input", { type: "number", id: "fkp-awg-h3", class: "cbi-input-text", style: "width:100%;" })]),
+          E("div", {}, [E("label", { style: "font-size:10px;" }, "H4"), E("input", { type: "number", id: "fkp-awg-h4", class: "cbi-input-text", style: "width:100%;" })]),
+        ]),
+        E("div", { style: "margin-top:6px;" }, [
+          E("label", { style: "font-size:10px;" }, "I1 (Init packet hex)"),
+          E("input", { type: "text", id: "fkp-awg-i1", class: "cbi-input-text", style: "width:100%;font-family:monospace;" }),
+        ]),
+        E("div", { style: "margin-top:6px;" }, [
+          E("label", { style: "font-size:10px;" }, "I2 (Response packet hex)"),
+          E("input", { type: "text", id: "fkp-awg-i2", class: "cbi-input-text", style: "width:100%;font-family:monospace;" }),
+        ]),
+        E("div", { style: "margin-top:6px;" }, [
+          E("label", { style: "font-size:10px;" }, "HeaderProtectionKey"),
+          E("input", { type: "text", id: "fkp-awg-hpk", class: "cbi-input-text", style: "width:100%;font-family:monospace;" }),
+        ]),
+      ]),
+    ]),
+    E("div", { id: "fkp-awg-status-msg", style: "color:#d9534f;margin-top:8px;font-size:12px;" }),
+  ]);
+
+  async function doParse(raw) {
+    const status = document.getElementById("fkp-awg-status-msg");
+    if (status) status.innerText = "";
+    try {
+      parsedResult = await parseAmneziaOrWgInput(raw);
+      fillReviewForm(parsedResult);
+      const reviewArea = document.getElementById("fkp-awg-review-area");
+      if (reviewArea) reviewArea.style.display = "block";
+    } catch (err) {
+      if (status) status.innerText = err.message || _("Parsing error");
+    }
+  }
+
+  function fillReviewForm(cfg) {
+    if (!cfg) return;
+    const tagEl = document.getElementById("fkp-awg-tag");
+    if (tagEl) tagEl.value = cfg.tag || "awg-out";
+
+    const epEl = document.getElementById("fkp-awg-endpoint");
+    if (epEl) epEl.value = cfg.server ? `${cfg.server}:${cfg.server_port || 51820}` : "";
+
+    const addrEl = document.getElementById("fkp-awg-address");
+    if (addrEl) addrEl.value = Array.isArray(cfg.local_address) ? cfg.local_address.join(", ") : (cfg.local_address || "");
+
+    const mtuEl = document.getElementById("fkp-awg-mtu");
+    if (mtuEl) mtuEl.value = cfg.mtu || 1420;
+
+    const privEl = document.getElementById("fkp-awg-privkey");
+    if (privEl) privEl.value = cfg.private_key || "";
+
+    const pubEl = document.getElementById("fkp-awg-pubkey");
+    if (pubEl) pubEl.value = cfg.peer_public_key || "";
+
+    const pskEl = document.getElementById("fkp-awg-psk");
+    if (pskEl) pskEl.value = cfg.pre_shared_key || "";
+
+    const awg = cfg.amnezia || {};
+    ["jc", "jmin", "jmax", "s1", "s2", "s3", "s4", "h1", "h2", "h3", "h4"].forEach((k) => {
+      const el = document.getElementById(`fkp-awg-${k}`);
+      if (el) el.value = typeof awg[k] !== "undefined" ? awg[k] : "";
+    });
+    const i1El = document.getElementById("fkp-awg-i1");
+    if (i1El) i1El.value = awg.i1 || "";
+
+    const i2El = document.getElementById("fkp-awg-i2");
+    if (i2El) i2El.value = awg.i2 || "";
+
+    const hpkEl = document.getElementById("fkp-awg-hpk");
+    if (hpkEl) hpkEl.value = awg.header_protection_key || "";
+
+    if (Object.keys(awg).length > 0) {
+      const details = document.getElementById("fkp-awg-amnezia-details");
+      if (details) details.open = true;
+    }
+  }
+
+  ui.showModal(_("Add AmneziaWG / WireGuard Outbound"), [
+    content,
+    E("div", { class: "right", style: "margin-top:14px;" }, [
+      E("button", {
+        class: "btn",
+        click: ui.hideModal,
+      }, _("Cancel")),
+      " ",
+      E("button", {
+        class: "btn cbi-button-action",
+        click: function () {
+          const tag = (document.getElementById("fkp-awg-tag").value || "awg-out").trim();
+          const ep = (document.getElementById("fkp-awg-endpoint").value || "").trim();
+          const privKey = (document.getElementById("fkp-awg-privkey").value || "").trim();
+          const pubKey = (document.getElementById("fkp-awg-pubkey").value || "").trim();
+
+          if (!ep || !privKey || !pubKey) {
+            alert(_("Please provide Server Endpoint, Private Key, and Peer Public Key."));
+            return;
+          }
+
+          let server = ep;
+          let port = 51820;
+          if (ep.startsWith("[")) {
+            const end = ep.indexOf("]");
+            server = ep.slice(1, end);
+            port = parseInt(ep.slice(end + 2), 10) || 51820;
+          } else if (ep.includes(":")) {
+            const parts = ep.split(":");
+            server = parts[0];
+            port = parseInt(parts[1], 10) || 51820;
+          }
+
+          const addrs = (document.getElementById("fkp-awg-address").value || "")
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean);
+
+          const mtuVal = parseInt(document.getElementById("fkp-awg-mtu").value, 10);
+          const pskVal = (document.getElementById("fkp-awg-psk").value || "").trim();
+
+          const outboundObj = {
+            type: "wireguard",
+            tag: tag,
+            server: server,
+            server_port: port,
+            local_address: addrs,
+            private_key: privKey,
+            peer_public_key: pubKey,
+          };
+          if (pskVal) outboundObj.pre_shared_key = pskVal;
+          if (mtuVal && !isNaN(mtuVal)) outboundObj.mtu = mtuVal;
+
+          const awgObj = {};
+          ["jc", "jmin", "jmax", "s1", "s2", "s3", "s4", "h1", "h2", "h3", "h4"].forEach((k) => {
+            const val = document.getElementById(`fkp-awg-${k}`).value;
+            if (val !== "" && !isNaN(parseInt(val, 10))) {
+              awgObj[k] = parseInt(val, 10);
+            }
+          });
+          const i1 = cleanAwgHex(document.getElementById("fkp-awg-i1").value);
+          if (i1) awgObj.i1 = i1;
+          const i2 = cleanAwgHex(document.getElementById("fkp-awg-i2").value);
+          if (i2) awgObj.i2 = i2;
+          const hpk = (document.getElementById("fkp-awg-hpk").value || "").trim();
+          if (hpk) awgObj.header_protection_key = hpk;
+
+          if (Object.keys(awgObj).length > 0) {
+            outboundObj.amnezia = awgObj;
+          }
+
+          const currentJsons = getConfigListValues(section_id, "outbound_jsons");
+          currentJsons.push(JSON.stringify(outboundObj));
+          writeListOption(section_id, "outbound_jsons", currentJsons);
+
+          const outboundOpt = outboundNameSourceOptions.get("outbound_jsons");
+          if (outboundOpt && typeof outboundOpt.getUIElement === "function") {
+            const uiEl = outboundOpt.getUIElement(section_id);
+            if (uiEl && typeof uiEl.setValue === "function") {
+              uiEl.setValue(currentJsons);
+            }
+          }
+
+          ui.hideModal();
+          ui.addNotification(null, E("p", {}, _("AmneziaWG / WireGuard outbound added successfully!")), "info");
+        },
+      }, _("Save Outbound")),
+    ]),
+  ]);
 }
 
 function showRuleSetSettingsModal(section_id, itemValue, option, widget) {
@@ -3966,6 +4475,7 @@ function ensureActionProvidersAvailabilityLoaded() {
           zapretInstalled: Boolean(capabilities?.zapretInstalled),
           zapret2Installed: Boolean(capabilities?.zapret2Installed),
           byedpiInstalled: Boolean(capabilities?.byedpiInstalled),
+          udpspeederInstalled: Boolean(capabilities?.udpspeederInstalled),
         });
         return actionProvidersAvailabilityState;
       })
@@ -3985,8 +4495,9 @@ function ensureActionProvidersAvailabilityLoaded() {
     main.ForkopShellMethods.checkZapretRuntime(),
     main.ForkopShellMethods.checkZapret2Runtime(),
     main.ForkopShellMethods.checkByedpiRuntime(),
+    main.ForkopShellMethods.checkUdpspeederRuntime(),
   ])
-    .then(([zapretResult, zapret2Result, byedpiResult]) => {
+    .then(([zapretResult, zapret2Result, byedpiResult, udpspeederResult]) => {
       const zapret =
         zapretResult && zapretResult.status === "fulfilled"
           ? zapretResult.value
@@ -3998,6 +4509,10 @@ function ensureActionProvidersAvailabilityLoaded() {
       const byedpi =
         byedpiResult && byedpiResult.status === "fulfilled"
           ? byedpiResult.value
+          : null;
+      const udpspeeder =
+        udpspeederResult && udpspeederResult.status === "fulfilled"
+          ? udpspeederResult.value
           : null;
 
       actionProvidersAvailabilityState.loaded = true;
@@ -4013,6 +4528,12 @@ function ensureActionProvidersAvailabilityLoaded() {
       actionProvidersAvailabilityState.byedpiInstalled = Boolean(
         byedpi && byedpi.success && byedpi.data && byedpi.data.byedpi_installed,
       );
+      actionProvidersAvailabilityState.udpspeederInstalled = Boolean(
+        udpspeeder &&
+          udpspeeder.success &&
+          udpspeeder.data &&
+          udpspeeder.data.udpspeeder_installed,
+      );
       return actionProvidersAvailabilityState;
     })
     .catch(() => {
@@ -4020,6 +4541,7 @@ function ensureActionProvidersAvailabilityLoaded() {
       actionProvidersAvailabilityState.zapretInstalled = false;
       actionProvidersAvailabilityState.zapret2Installed = false;
       actionProvidersAvailabilityState.byedpiInstalled = false;
+      actionProvidersAvailabilityState.udpspeederInstalled = false;
       return actionProvidersAvailabilityState;
     })
     .finally(() => {
@@ -4039,6 +4561,10 @@ function isZapret2InstalledForUi() {
 
 function isByedpiInstalledForUi() {
   return actionProvidersAvailabilityState.byedpiInstalled;
+}
+
+function isUdpspeederInstalledForUi() {
+  return actionProvidersAvailabilityState.udpspeederInstalled;
 }
 
 function getRuleConfiguredAction(section_id) {
@@ -4068,6 +4594,8 @@ function getActionOptionLabel(action) {
       return "Zapret2";
     case "byedpi":
       return "ByeDPI";
+    case "udpspeeder":
+      return "UDPspeeder";
     case "outbound":
       return _("JSON outbound");
     case "proxy":
@@ -4089,6 +4617,10 @@ function getRuleActionDisplayValue(section_id) {
 
   if (action === "byedpi") {
     return "ByeDPI";
+  }
+
+  if (action === "udpspeeder") {
+    return "UDPspeeder";
   }
 
   return getActionOptionLabel(action);
@@ -4114,6 +4646,9 @@ function populateActionOptionValues(option) {
   }
   if (isByedpiInstalledForUi()) {
     option.value("byedpi", getActionOptionLabel("byedpi"));
+  }
+  if (isUdpspeederInstalledForUi()) {
+    option.value("udpspeeder", getActionOptionLabel("udpspeeder"));
   }
 }
 
@@ -7202,6 +7737,160 @@ function createSectionContent(section) {
   };
   configureTextareaOption(o, analyzeByedpiStrategy);
 
+  // --- UDPspeeder Options ---
+  o = section.taboption(
+    "settings",
+    form.Value,
+    "udpspeeder_server",
+    _("UDPspeeder Server"),
+    _("Remote VPS server IP address or domain name"),
+  );
+  o.depends("action", "udpspeeder");
+  o.modalonly = true;
+  o.placeholder = "203.0.113.10";
+
+  o = section.taboption(
+    "settings",
+    form.Value,
+    "udpspeeder_server_port",
+    _("Server Port"),
+    _("UDP port where UDPspeeder listens on your VPS"),
+  );
+  o.depends("action", "udpspeeder");
+  o.modalonly = true;
+  o.datatype = "port";
+  o.placeholder = "10901";
+  o.default = "10901";
+
+  o = section.taboption(
+    "settings",
+    form.Value,
+    "udpspeeder_local_port",
+    _("Local Router Port"),
+    _("Local port on 127.0.0.1 where UDPspeeder listens for outgoing traffic"),
+  );
+  o.depends("action", "udpspeeder");
+  o.modalonly = true;
+  o.datatype = "port";
+  o.placeholder = "10901";
+  o.default = "10901";
+
+  o = section.taboption(
+    "settings",
+    form.Value,
+    "udpspeeder_key",
+    _("Password / Key (-k)"),
+    _("Shared encryption password between router and server"),
+  );
+  o.depends("action", "udpspeeder");
+  o.modalonly = true;
+  o.password = true;
+  o.default = "forkop";
+
+  o = section.taboption(
+    "settings",
+    form.ListValue,
+    "udpspeeder_mode",
+    _("FEC Mode (--mode)"),
+    _("Mode 0: Normal FEC packet processing (recommended); Mode 1: Aggressive retransmission"),
+  );
+  o.depends("action", "udpspeeder");
+  o.modalonly = true;
+  o.value("0", _("Mode 0: Normal FEC (Default)"));
+  o.value("1", _("Mode 1: Aggressive"));
+  o.default = "0";
+
+  o = section.taboption(
+    "settings",
+    form.Value,
+    "udpspeeder_fec",
+    _("FEC Ratio (-f)"),
+    _("Forward error correction redundancy, e.g. 20:10 (10 redundant packets per 20 data packets)"),
+  );
+  o.depends("action", "udpspeeder");
+  o.modalonly = true;
+  o.placeholder = "20:10";
+  o.default = "20:10";
+
+  o = section.taboption(
+    "settings",
+    form.Value,
+    "udpspeeder_mtu",
+    _("MTU (--mtu)"),
+    _("Network MTU for packets (default 1200)"),
+  );
+  o.depends("action", "udpspeeder");
+  o.modalonly = true;
+  o.datatype = "uinteger";
+  o.placeholder = "1200";
+  o.default = "1200";
+
+  o = section.taboption(
+    "settings",
+    form.Value,
+    "udpspeeder_target_port",
+    _("Server Target Port (-r on VPS)"),
+    _("Destination port on server for incoming packets (e.g. WireGuard / OpenVPN server port 51820)"),
+  );
+  o.depends("action", "udpspeeder");
+  o.modalonly = true;
+  o.datatype = "port";
+  o.placeholder = "51820";
+  o.default = "51820";
+
+  o = section.taboption(
+    "settings",
+    form.Value,
+    "udpspeeder_extra_opts",
+    _("Extra Options"),
+    _("Additional arguments passed to udpspeeder client (e.g. --timeout 8)"),
+  );
+  o.depends("action", "udpspeeder");
+  o.modalonly = true;
+
+  o = section.taboption(
+    "settings",
+    form.DummyValue,
+    "_udpspeeder_vps_deploy",
+    _("Server Deployment (VPS)"),
+    _("Commands to deploy and run UDPspeeder on your VPS server"),
+  );
+  o.depends("action", "udpspeeder");
+  o.modalonly = true;
+  o.rawhtml = true;
+  o.cfgvalue = function (section_id) {
+    const sPort = uci.get(UCI_PACKAGE, section_id, "udpspeeder_server_port") || "10901";
+    const tPort = uci.get(UCI_PACKAGE, section_id, "udpspeeder_target_port") || "51820";
+    const key = uci.get(UCI_PACKAGE, section_id, "udpspeeder_key") || "forkop";
+    const mode = uci.get(UCI_PACKAGE, section_id, "udpspeeder_mode") || "0";
+    const fec = uci.get(UCI_PACKAGE, section_id, "udpspeeder_fec") || "20:10";
+
+    const dockerCmd = `docker run -d --name udpspeeder --restart=always --net=host wangyu/udpspeeder:latest speederv2 -s -l 0.0.0.0:${sPort} -r 127.0.0.1:${tPort} -k "${key}" --mode ${mode} -f ${fec} --fix-latency`;
+    const binaryCmd = `curl -sSL https://raw.githubusercontent.com/wangyu-/UDPspeeder/master/install.sh | bash && speederv2 -s -l 0.0.0.0:${sPort} -r 127.0.0.1:${tPort} -k "${key}" --mode ${mode} -f ${fec} --fix-latency`;
+
+    return `
+      <div style="background:#1e1e2e;color:#cdd6f4;padding:14px;border-radius:8px;margin-top:8px;font-family:monospace;font-size:12px;border:1px solid #45475a;">
+        <div style="font-weight:bold;color:#89b4fa;margin-bottom:6px;font-size:13px;">
+          🚀 Команды для запуска на сервере (VPS) / Server Deployment
+        </div>
+        <p style="margin-bottom:8px;color:#a6adc8;font-size:11px;">
+          UDPspeeder должен быть запущен как на роутере (клиент), так и на VPS (сервер). Запустите одну из команд на вашем сервере:
+        </p>
+        <div style="margin-bottom:6px;font-weight:bold;color:#a6e3a1;">Вариант 1: Docker (Рекомендуется)</div>
+        <div style="position:relative;background:#181825;padding:8px 10px;border-radius:4px;border:1px solid #313244;overflow-x:auto;user-select:all;word-break:break-all;margin-bottom:6px;">
+          <code>${dockerCmd}</code>
+        </div>
+        <button type="button" class="cbi-button cbi-button-action" style="margin-bottom:12px;" onclick="navigator.clipboard.writeText('${dockerCmd}').then(()=>alert('Docker команда скопирована в буфер обмена!'))">📋 Скопировать Docker команду</button>
+
+        <div style="margin-bottom:6px;font-weight:bold;color:#f9e2af;">Вариант 2: Прямой запуск / Linux Binary</div>
+        <div style="position:relative;background:#181825;padding:8px 10px;border-radius:4px;border:1px solid #313244;overflow-x:auto;user-select:all;word-break:break-all;margin-bottom:6px;">
+          <code>${binaryCmd}</code>
+        </div>
+        <button type="button" class="cbi-button cbi-button-action" onclick="navigator.clipboard.writeText('${binaryCmd}').then(()=>alert('Linux команда скопирована в буфер обмена!'))">📋 Скопировать команду Linux</button>
+      </div>
+    `;
+  };
+
   o = section.taboption(
     "settings",
     form.DynamicList,
@@ -7342,6 +8031,21 @@ function createSectionContent(section) {
   };
   o.onListChange = refreshDashboardFilterChoiceWidgets;
   outboundNameSourceOptions.set("outbound_jsons", o);
+
+  o = section.taboption(
+    "settings",
+    form.Button,
+    "_add_amnezia_wg",
+    _("AmneziaWG / WireGuard"),
+    _("Import AmneziaWG (AWG 1.0 / 2.0 / 3.1) or standard WireGuard configuration (.conf file, vpn:// link, or text)"),
+  );
+  o.depends("action", "connection");
+  o.modalonly = true;
+  o.inputtitle = _("+ Add AmneziaWG / WireGuard");
+  o.inputstyle = "action";
+  o.onclick = function (_ev, section_id) {
+    showAmneziaWgImportModal(section_id);
+  };
 
   o = section.taboption(
     "settings",

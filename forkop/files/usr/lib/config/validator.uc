@@ -558,6 +558,8 @@ function download_section_action_available(action, byedpi_installed, zapret_inst
         return true;
     if (action == "byedpi")
         return bool_flag(byedpi_installed);
+    if (action == "udpspeeder")
+        return true;
     if (action == "zapret")
         return bool_flag(zapret_installed);
     if (action == "zapret2")
@@ -1446,6 +1448,11 @@ function validate_rule(section, sections, context) {
         validate_provider_strategy("byedpi", section, context);
     }
 
+    if (action == "udpspeeder") {
+        validate_common_rule_references(section, context);
+        return;
+    }
+
     if (connections.is_connections_action(action)) {
         validate_dashboard_filter(section);
 
@@ -1938,6 +1945,8 @@ function has_outbound_section(ctx) {
 
         let action = rule_action(section);
         if (action == "byedpi" && ctx.byedpi_installed)
+            return true;
+        if (action == "udpspeeder")
             return true;
         if (action == "zapret" && ctx.zapret_installed)
             return true;

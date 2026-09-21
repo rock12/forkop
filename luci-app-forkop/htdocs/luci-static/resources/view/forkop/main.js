@@ -2430,6 +2430,7 @@ var Forkop;
     AvailableMethods2["CHECK_ZAPRET_RUNTIME"] = "check_zapret_runtime";
     AvailableMethods2["CHECK_ZAPRET2_RUNTIME"] = "check_zapret2_runtime";
     AvailableMethods2["CHECK_BYEDPI_RUNTIME"] = "check_byedpi_runtime";
+    AvailableMethods2["CHECK_UDPSPEEDER_RUNTIME"] = "check_udpspeeder_runtime";
     AvailableMethods2["CHECK_INBOUNDS_CONFIG"] = "check_inbounds_config";
     AvailableMethods2["GET_STATUS"] = "get_status";
     AvailableMethods2["GET_OUTBOUND_METADATA"] = "get_outbound_metadata";
@@ -2440,6 +2441,7 @@ var Forkop;
     AvailableMethods2["GET_ZAPRET_STATUS"] = "get_zapret_status";
     AvailableMethods2["GET_ZAPRET2_STATUS"] = "get_zapret2_status";
     AvailableMethods2["GET_BYEDPI_STATUS"] = "get_byedpi_status";
+    AvailableMethods2["GET_UDPSPEEDER_STATUS"] = "get_udpspeeder_status";
     AvailableMethods2["CLASH_API"] = "clash_api";
     AvailableMethods2["ENABLE"] = "enable";
     AvailableMethods2["DISABLE"] = "disable";
@@ -2649,6 +2651,9 @@ var ForkopShellMethods = {
   checkByedpiRuntime: async () => callBaseMethod(
     Forkop.AvailableMethods.CHECK_BYEDPI_RUNTIME
   ),
+  checkUdpspeederRuntime: async () => callBaseMethod(
+    Forkop.AvailableMethods.CHECK_UDPSPEEDER_RUNTIME
+  ),
   checkInboundsConfig: async () => callBaseMethod(
     Forkop.AvailableMethods.CHECK_INBOUNDS_CONFIG
   ),
@@ -2678,6 +2683,9 @@ var ForkopShellMethods = {
   ),
   getByedpiStatus: async () => callBaseMethod(
     Forkop.AvailableMethods.GET_BYEDPI_STATUS
+  ),
+  getUdpspeederStatus: async () => callBaseMethod(
+    Forkop.AvailableMethods.GET_UDPSPEEDER_STATUS
   ),
   getClashApiProxies: async () => callBaseMethod(Forkop.AvailableMethods.CLASH_API, [
     Forkop.AvailableClashAPIMethods.GET_PROXIES

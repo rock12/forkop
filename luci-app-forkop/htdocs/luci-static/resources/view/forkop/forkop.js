@@ -108,6 +108,7 @@ const EntryPoint = {
       zapretInstalled: false,
       zapret2Installed: false,
       byedpiInstalled: false,
+      udpspeederInstalled: false,
       serverInboundsEnabledCount: -1,
     };
     let uiCapabilitiesPromise = null;
@@ -125,6 +126,7 @@ const EntryPoint = {
               zapretInstalled: uiCapabilities.zapretInstalled,
               zapret2Installed: uiCapabilities.zapret2Installed,
               byedpiInstalled: uiCapabilities.byedpiInstalled,
+              udpspeederInstalled: uiCapabilities.udpspeederInstalled,
             },
           }),
         );
@@ -142,6 +144,7 @@ const EntryPoint = {
             zapret_installed: uiCapabilities.zapretInstalled ? 1 : 0,
             zapret2_installed: uiCapabilities.zapret2Installed ? 1 : 0,
             byedpi_installed: uiCapabilities.byedpiInstalled ? 1 : 0,
+            udpspeeder_installed: uiCapabilities.udpspeederInstalled ? 1 : 0,
             server_inbounds_enabled_count:
               uiCapabilities.serverInboundsEnabledCount,
             zapret_version: uiCapabilities.zapretInstalled
@@ -152,6 +155,9 @@ const EntryPoint = {
               : "not installed",
             byedpi_version: uiCapabilities.byedpiInstalled
               ? currentSystemInfo.byedpi_version
+              : "not installed",
+            udpspeeder_version: uiCapabilities.udpspeederInstalled
+              ? currentSystemInfo.udpspeeder_version
               : "not installed",
           },
         });
@@ -176,6 +182,9 @@ const EntryPoint = {
       );
       uiCapabilities.byedpiInstalled = Boolean(
         Number(data?.byedpi_installed) === 1,
+      );
+      uiCapabilities.udpspeederInstalled = Boolean(
+        Number(data?.udpspeeder_installed) === 1,
       );
       const serverInboundsEnabledCount =
         typeof data?.server_inbounds_enabled_count !== "undefined"
@@ -225,6 +234,7 @@ const EntryPoint = {
         main.ForkopShellMethods.checkZapretRuntime(),
         main.ForkopShellMethods.checkZapret2Runtime(),
         main.ForkopShellMethods.checkByedpiRuntime(),
+        main.ForkopShellMethods.checkUdpspeederRuntime(),
         main.ForkopShellMethods.checkInboundsConfig(),
       ]).then(
         ([
@@ -232,6 +242,7 @@ const EntryPoint = {
           zapretRuntimeResult,
           zapret2RuntimeResult,
           byedpiRuntimeResult,
+          udpspeederRuntimeResult,
           inboundsConfigResult,
         ]) => {
           const serverCapabilities =
@@ -249,6 +260,10 @@ const EntryPoint = {
           const byedpiRuntime =
             byedpiRuntimeResult.status === "fulfilled"
               ? byedpiRuntimeResult.value
+              : null;
+          const udpspeederRuntime =
+            udpspeederRuntimeResult.status === "fulfilled"
+              ? udpspeederRuntimeResult.value
               : null;
           const inboundsConfig =
             inboundsConfigResult.status === "fulfilled"
@@ -286,6 +301,11 @@ const EntryPoint = {
             byedpi_installed:
               byedpiRuntime?.success &&
               Number(byedpiRuntime.data?.byedpi_installed) === 1
+                ? 1
+                : 0,
+            udpspeeder_installed:
+              udpspeederRuntime?.success &&
+              Number(udpspeederRuntime.data?.udpspeeder_installed) === 1
                 ? 1
                 : 0,
             server_inbounds_enabled_count:
