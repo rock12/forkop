@@ -36,7 +36,8 @@ function config(settings, runtime) {
         default_domain_resolver: type(runtime) == "object" && as_string(runtime.default_domain_resolver) != ""
             ? as_string(runtime.default_domain_resolver)
             : runtime_constants.DNS_SERVER_TAG,
-        default_mark: runtime_constants.OUTBOUND_MARK
+        default_mark: runtime_constants.OUTBOUND_MARK,
+        default_http_client: runtime_constants.DIRECT_OUTBOUND_TAG
     };
 
     if (output_network_interface != "")

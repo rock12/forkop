@@ -492,6 +492,9 @@ function base_config(settings, service_address, runtime_context) {
             { type: "direct", tag: runtime_constants.DIRECT_OUTBOUND_TAG },
             { type: "direct", tag: runtime_constants.BYPASS_OUTBOUND_TAG }
         ],
+        http_clients: [
+            { tag: runtime_constants.DIRECT_OUTBOUND_TAG, detour: runtime_constants.DIRECT_OUTBOUND_TAG }
+        ],
         route: runtime_route.config(settings, runtime_context),
         services: [],
         experimental: {
@@ -842,22 +845,31 @@ function duration_to_seconds(value) {
     if (match(value, /^[0-9]+$/) != null)
         return int(value, 10);
 
-    let suffix = substr(value, length(value) - 1);
-    let number = substr(value, 0, length(value) - 1);
-    if (match(number, /^[0-9]+$/) == null)
-        return null;
-
-    let multiplier = null;
-    if (suffix == "s")
-        multiplier = 1;
-    else if (suffix == "m")
-        multiplier = 60;
-    else if (suffix == "h")
-        multiplier = 3600;
-    else if (suffix == "d")
-        multiplier = 86400;
-
-    return multiplier == null ? null : int(number, 10) * multiplier;
+    let total = 0;
+    let remaining = value;
+    let matched_any = false;
+    while (length(remaining) > 0) {
+        let m = match(remaining, /^([0-9]+)([smhd])/);
+        if (m == null)
+            return null;
+        let number = m[1];
+        let suffix = m[2];
+        let multiplier = null;
+        if (suffix == "s")
+            multiplier = 1;
+        else if (suffix == "m")
+            multiplier = 60;
+        else if (suffix == "h")
+            multiplier = 3600;
+        else if (suffix == "d")
+            multiplier = 86400;
+        if (multiplier == null)
+            return null;
+        total += int(number, 10) * multiplier;
+        remaining = substr(remaining, length(number) + length(suffix));
+        matched_any = true;
+    }
+    return matched_any ? total : null;
 }
 
 function urltest_check_interval(section, urltest_id) {
@@ -865,23 +877,15 @@ function urltest_check_interval(section, urltest_id) {
     return interval != "" ? interval : "3m";
 }
 
-function legacy_urltest_idle_timeout(section, urltest_id) {
-    if (urltest_id != "urltest")
-        return "";
-
-    let settings = connections.urltest_settings(section, urltest_id);
-    if (type(settings) == "object" && as_string(settings[".type"] || "") == "urltest")
-        return "";
-
-    let interval = urltest_check_interval(section, urltest_id);
-    let interval_seconds = duration_to_seconds(interval);
-    let default_idle_seconds = duration_to_seconds(runtime_constants.URLTEST_DEFAULT_IDLE_TIMEOUT);
-    return interval_seconds != null && interval_seconds > default_idle_seconds ? interval : "";
-}
-
 function urltest_idle_timeout(section, urltest_id) {
     let configured = connections.urltest_idle_timeout(section, urltest_id);
-    return configured != "" ? configured : legacy_urltest_idle_timeout(section, urltest_id);
+    let interval = urltest_check_interval(section, urltest_id);
+    let interval_seconds = duration_to_seconds(interval);
+    let effective = configured != "" ? configured : runtime_constants.URLTEST_DEFAULT_IDLE_TIMEOUT;
+    let effective_seconds = duration_to_seconds(effective);
+    if (interval_seconds != null && effective_seconds != null && interval_seconds > effective_seconds)
+        return interval;
+    return configured;
 }
 
 function supported_urltest_filter_mode(mode) {
@@ -2526,11 +2530,34 @@ function add_source_aware_bypass_dns_rules(config, matchers, rewrite_ttl) {
         return;
     }
 
-    let bypass_rule = copy_dns_matchers(matchers);
-    bypass_rule.action = "route";
-    bypass_rule.server = runtime_constants.DNSMASQ_DNS_SERVER_TAG;
-    bypass_rule.rewrite_ttl = rewrite_ttl;
-    push_dns_matcher_rule(config, bypass_rule);
+    // sing-box 1.14+ response matching must inspect the response from the
+    // same path that will be returned. Evaluate dnsmasq first, then respond
+    // with that accepted non-FakeIP answer below.
+    let evaluate = copy_dns_matchers(matchers);
+    evaluate.action = "evaluate";
+    evaluate.server = runtime_constants.DNSMASQ_DNS_SERVER_TAG;
+    push_dns_matcher_rule(config, evaluate);
+
+    push_dns_matcher_rule(config, {
+        type: "logical",
+        mode: "and",
+        rules: [
+            copy_dns_matchers(matchers),
+            {
+                ip_cidr: [ runtime_constants.FAKEIP_INET4_RANGE, runtime_constants.FAKEIP_INET6_RANGE ],
+                invert: true,
+                match_response: true
+            }
+        ],
+        action: "respond"
+    });
+
+    let fallback = copy_dns_matchers(matchers);
+    fallback.action = "route";
+    fallback.server = runtime_constants.DNS_SERVER_TAG;
+    fallback.query_type = [ "A", "AAAA" ];
+    fallback.rewrite_ttl = rewrite_ttl;
+    push_dns_matcher_rule(config, fallback);
 }
 
 function add_section_dns_matcher_rule(config, section, matchers, rewrite_ttl) {
