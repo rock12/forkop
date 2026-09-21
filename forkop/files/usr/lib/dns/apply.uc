@@ -97,6 +97,7 @@ function dnsmasq_has_forkop_managed_state() {
     return uci_get("dhcp.@dnsmasq[0].forkop_server") != "" ||
         uci_get("dhcp.@dnsmasq[0].forkop_noresolv") != "" ||
         uci_get("dhcp.@dnsmasq[0].forkop_cachesize") != "" ||
+        uci_get("dhcp.@dnsmasq[0].forkop_rebind_protection") != "" ||
         uci_get("dhcp.@dnsmasq[0].forkop_notinterface") != "" ||
         dnsmasq_legacy_instance_exists();
 }
@@ -109,6 +110,7 @@ function dnsmasq_default_config_is_complete() {
     return dnsmasq_default_has_forkop_dns() &&
         uci_get("dhcp.@dnsmasq[0].noresolv") == "1" &&
         uci_get("dhcp.@dnsmasq[0].cachesize") == "0" &&
+        uci_get("dhcp.@dnsmasq[0].rebind_protection") == "0" &&
         !dnsmasq_legacy_instance_exists();
 }
 
@@ -186,12 +188,14 @@ function dnsmasq_configure_default_instance() {
     if (!default_has_forkop_dns) {
         backup_dnsmasq_config_option("noresolv", "forkop_noresolv");
         backup_dnsmasq_config_option("cachesize", "forkop_cachesize");
+        backup_dnsmasq_config_option("rebind_protection", "forkop_rebind_protection");
     }
 
     uci_delete("dhcp.@dnsmasq[0].server");
     uci_add_list("dhcp.@dnsmasq[0].server", SB_DNS_INBOUND_ADDRESS);
     uci_set("dhcp.@dnsmasq[0].noresolv", "1");
     uci_set("dhcp.@dnsmasq[0].cachesize", "0");
+    uci_set("dhcp.@dnsmasq[0].rebind_protection", "0");
 }
 
 function dnsmasq_restore_default_instance() {
@@ -224,6 +228,12 @@ function dnsmasq_restore_default_instance() {
         restore_dnsmasq_config_option("cachesize", "forkop_cachesize", "");
     else if (managed_global_dns)
         uci_set("dhcp.@dnsmasq[0].cachesize", "150");
+
+    let rebind_protection = uci_get("dhcp.@dnsmasq[0].forkop_rebind_protection");
+    if (rebind_protection != "")
+        restore_dnsmasq_config_option("rebind_protection", "forkop_rebind_protection", "");
+    else if (managed_global_dns)
+        uci_set("dhcp.@dnsmasq[0].rebind_protection", "1");
 }
 
 function dnsmasq_configure(force) {

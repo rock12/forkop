@@ -1413,7 +1413,10 @@ function latency_clash_method(latency_type) {
 
 function latency_worker(path, latency_type, tag, timeout) {
     let method = latency_clash_method(latency_type).method;
-    let status = command_status(command_from_args([ BIN_PATH, "clash_api", method, tag, timeout, path ]) + " >/dev/null 2>&1");
+    let cmd_args = (latency_type == "proxy_list") ?
+        [ BIN_PATH, "clash_api", method, tag, timeout, path ] :
+        [ BIN_PATH, "clash_api", method, tag, timeout ];
+    let status = command_status(command_from_args(cmd_args) + " >/dev/null 2>&1");
     if (status == 0)
         write_finished_action_state(path, true, "Latency test completed", status);
     else

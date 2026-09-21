@@ -182,6 +182,7 @@ cat >"$STATE" <<'EOF_STATE'
 dhcp.@dnsmasq[0].server=1.1.1.1 8.8.8.8
 dhcp.@dnsmasq[0].noresolv=0
 dhcp.@dnsmasq[0].cachesize=150
+dhcp.@dnsmasq[0].rebind_protection=1
 forkop.settings.shutdown_correctly=1
 EOF_STATE
 
@@ -194,6 +195,8 @@ assert_value 'dhcp.@dnsmasq[0].noresolv' '1'
 assert_value 'dhcp.@dnsmasq[0].forkop_noresolv' '0'
 assert_value 'dhcp.@dnsmasq[0].cachesize' '0'
 assert_value 'dhcp.@dnsmasq[0].forkop_cachesize' '150'
+assert_value 'dhcp.@dnsmasq[0].rebind_protection' '0'
+assert_value 'dhcp.@dnsmasq[0].forkop_rebind_protection' '1'
 assert_log_contains 'commit dhcp'
 assert_dnsmasq_restarted
 
@@ -203,9 +206,11 @@ ucode -L "$UCODE_LIB" "$APPLY" restore force
 assert_value 'dhcp.@dnsmasq[0].server' '1.1.1.1 8.8.8.8'
 assert_value 'dhcp.@dnsmasq[0].noresolv' '0'
 assert_value 'dhcp.@dnsmasq[0].cachesize' '150'
+assert_value 'dhcp.@dnsmasq[0].rebind_protection' '1'
 assert_absent 'dhcp.@dnsmasq[0].forkop_server'
 assert_absent 'dhcp.@dnsmasq[0].forkop_noresolv'
 assert_absent 'dhcp.@dnsmasq[0].forkop_cachesize'
+assert_absent 'dhcp.@dnsmasq[0].forkop_rebind_protection'
 assert_log_contains 'commit dhcp'
 assert_dnsmasq_restarted
 

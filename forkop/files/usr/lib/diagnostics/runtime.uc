@@ -1568,7 +1568,14 @@ function check_fakeip() {
 }
 
 function clash_json_output(args) {
-    print(status_output([ "stdin-json" ], command_output(command_from_args(args))));
+    let raw = command_output(command_from_args(args));
+    let parsed = null;
+    try {
+        parsed = json(raw);
+    } catch (e) {}
+    print(status_output([ "stdin-json" ], raw));
+    if (type(parsed) == "object" && parsed.message && !parsed.delay)
+        return 1;
     return 0;
 }
 
@@ -1651,9 +1658,11 @@ function clash_api(action, arg1, arg2, arg3) {
         if (as_string(arg1) == "")
             return clash_json_error("proxy_tag required");
         let url = as_string(arg3 || "");
-        if (url == "")
+        if (!match(url, /^https?:\/\//))
             url = test_url;
-        let args = [ "curl", "-G", "-s", base_url + "/proxies/" + clash_urlencode(arg1) + "/delay" ];
+        let proxy_types = clash_proxy_type_map(base_url, auth);
+        let endpoint = clash_latency_endpoint(base_url, arg1, proxy_types[arg1]);
+        let args = [ "curl", "-G", "-s", endpoint ];
         for (let item in auth) push(args, item);
         push(args, "--data-urlencode");
         push(args, "url=" + url);
