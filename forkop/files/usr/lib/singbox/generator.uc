@@ -3016,7 +3016,7 @@ function unsupported_matcher_key(section) {
 }
 
 function add_outbound_for_section(config, section, taken, sections) {
-    let action = option(section, "action", "");
+    let action = connections.action(section);
     let section_name = section[".name"];
     if (!valid_section_name(section_name))
         runtime_generate_unsupported("section name is not safe for sing-box config generation");
@@ -3050,7 +3050,7 @@ function add_outbound_for_section(config, section, taken, sections) {
 
 function reserve_section_outbound_tags(sections, taken) {
     for (let section in sections) {
-        let action = option(section, "action", "");
+        let action = connections.action(section);
         if (connections.is_connections_action(action) ||
             action == "byedpi" || action == "zapret" || action == "zapret2" || action == "udpspeeder")
             taken[outbound_tag(section[".name"])] = true;
@@ -3075,7 +3075,7 @@ function add_route_for_section(config, section) {
 function add_service_route_rules(config, sections) {
     let first = null;
     for (let section in sections) {
-        let action = option(section, "action", "");
+        let action = connections.action(section);
         if (connections.is_connections_action(action) ||
             action == "byedpi" || action == "zapret" || action == "zapret2" || action == "udpspeeder") {
             first = section;

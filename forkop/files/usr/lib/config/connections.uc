@@ -306,7 +306,17 @@ function normalize_action(action) {
 }
 
 function action(section) {
-    return normalize_action(option(section, "action", ""));
+    let act = option(section, "action", "");
+    if (act == "") {
+        if (option(section, "awg_config", "") != "")
+            act = "amneziawg";
+        else if (length(outbound_jsons(section)) > 0 ||
+                 length(connection_urls(section)) > 0 ||
+                 length(subscription_urls(section)) > 0 ||
+                 length(interfaces(section)) > 0)
+            act = "connection";
+    }
+    return normalize_action(act);
 }
 
 function connection_urls(section) {

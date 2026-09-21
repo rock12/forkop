@@ -805,7 +805,17 @@ function server_enabled(section) {
 }
 
 function rule_action(section) {
-    return option(section, "action", "");
+    let act = option(section, "action", "");
+    if (act != "")
+        return act;
+    if (option(section, "awg_config", "") != "")
+        return "amneziawg";
+    if (length(connections.outbound_jsons(section)) > 0 ||
+        length(connections.connection_urls(section)) > 0 ||
+        length(connections.subscription_urls(section)) > 0 ||
+        length(connections.interfaces(section)) > 0)
+        return "connection";
+    return "";
 }
 
 function rule_action_supported(action) {

@@ -949,7 +949,9 @@ async function withTimeout(promise, timeoutMs, operationName, timeoutMessage = _
   } finally {
     clearTimeout(timeoutId);
     const elapsed = performance.now() - start;
-    logger.info("[SHELL]", `[${operationName}] took ${elapsed.toFixed(2)} ms`);
+    if (!operationName.includes("get_ui_state")) {
+      logger.info("[SHELL]", `[${operationName}] took ${elapsed.toFixed(2)} ms`);
+    }
   }
 }
 
@@ -3252,7 +3254,7 @@ function getJsonOutbounds(section) {
 }
 function isConnectionAction(action) {
   return Boolean(
-    action && ["connection", "proxy", "outbound", "vpn"].includes(action)
+    action && ["connection", "proxy", "outbound", "vpn", "amneziawg"].includes(action)
   );
 }
 function hasSubscriptionSources(section) {
@@ -4934,7 +4936,7 @@ function applyUiStateToStore(uiState) {
 
 // src/forkop/services/runtimeUiState.service.ts
 var RUNTIME_UI_STATE_REFRESH_MIN_INTERVAL_MS = 500;
-var RUNTIME_UI_STATE_IDLE_POLL_INTERVAL_MS = 1e3;
+var RUNTIME_UI_STATE_IDLE_POLL_INTERVAL_MS = 3e3;
 var RUNTIME_UI_STATE_ACTIVE_POLL_INTERVAL_MS = 500;
 var runtimeUiStateRefreshPromise = null;
 var lastRuntimeUiStateRefreshAt = 0;

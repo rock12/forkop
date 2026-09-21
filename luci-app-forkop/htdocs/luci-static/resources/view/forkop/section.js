@@ -4401,6 +4401,15 @@ function showAmneziaWgImportModal(section_id) {
           if (rawInputVal) {
             uci.set(UCI_PACKAGE, section_id, "awg_config", rawInputVal);
           }
+          if (!uci.get(UCI_PACKAGE, section_id, "action")) {
+            uci.set(UCI_PACKAGE, section_id, "action", "amneziawg");
+          }
+          if (!uci.get(UCI_PACKAGE, section_id, "enabled")) {
+            uci.set(UCI_PACKAGE, section_id, "enabled", "1");
+          }
+          if (!uci.get(UCI_PACKAGE, section_id, "label")) {
+            uci.set(UCI_PACKAGE, section_id, "label", tag || "AmneziaWG");
+          }
 
           ui.hideModal();
           ui.addNotification(null, E("p", {}, _("AmneziaWG / WireGuard outbound added successfully!")), "info");
@@ -7564,8 +7573,15 @@ function createSectionContent(section) {
   o.default = "connection";
   o.rmempty = false;
   o.modalonly = true;
+  o.forcewrite = true;
   o.cfgvalue = function (section_id) {
-    return getRuleConfiguredAction(section_id);
+    const act = getRuleConfiguredAction(section_id);
+    if (act) return act;
+    if (uci.get(UCI_PACKAGE, section_id, "awg_config")) return "amneziawg";
+    return "connection";
+  };
+  o.write = function (section_id, value) {
+    uci.set(UCI_PACKAGE, section_id, "action", value || "connection");
   };
   o.load = function (section_id) {
     return ensureActionProvidersAvailabilityLoaded().then(() => {
