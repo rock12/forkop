@@ -810,6 +810,8 @@ function rule_action(section) {
         return act;
     if (option(section, "awg_config", "") != "")
         return "amneziawg";
+    if (option(section, "mieru_server", "") != "")
+        return "mieru";
     if (length(connections.outbound_jsons(section)) > 0 ||
         length(connections.connection_urls(section)) > 0 ||
         length(connections.subscription_urls(section)) > 0 ||
@@ -819,11 +821,11 @@ function rule_action(section) {
 }
 
 function rule_action_supported(action) {
-    return contains([ "connection", "proxy", "outbound", "vpn", "bypass", "block", "dns", "zapret", "zapret2", "byedpi", "udpspeeder", "amneziawg" ], as_string(action));
+    return contains([ "connection", "proxy", "outbound", "vpn", "bypass", "block", "dns", "zapret", "zapret2", "byedpi", "udpspeeder", "amneziawg", "mieru" ], as_string(action));
 }
 
 function server_routing_section_action_supported(action) {
-    return contains([ "connection", "proxy", "outbound", "vpn", "zapret", "zapret2", "byedpi", "udpspeeder", "amneziawg" ], as_string(action));
+    return contains([ "connection", "proxy", "outbound", "vpn", "zapret", "zapret2", "byedpi", "udpspeeder", "amneziawg", "mieru" ], as_string(action));
 }
 
 function duration_to_seconds_value(value) {
@@ -1463,6 +1465,20 @@ function validate_rule(section, sections, context) {
         return;
     }
 
+    if (action == "mieru") {
+        let server = option(section, "mieru_server", "");
+        if (server == "")
+            fail_validation("Enabled Mieru section '" + name + "' requires 'mieru_server'. Aborted.");
+        let user = option(section, "mieru_username", "");
+        if (user == "")
+            fail_validation("Enabled Mieru section '" + name + "' requires 'mieru_username'. Aborted.");
+        let pass = option(section, "mieru_password", "");
+        if (pass == "")
+            fail_validation("Enabled Mieru section '" + name + "' requires 'mieru_password'. Aborted.");
+        validate_common_rule_references(section, context);
+        return;
+    }
+
     if (connections.is_connections_action(action)) {
         validate_dashboard_filter(section);
 
@@ -1959,6 +1975,8 @@ function has_outbound_section(ctx) {
         if (action == "udpspeeder")
             return true;
         if (action == "amneziawg")
+            return true;
+        if (action == "mieru")
             return true;
         if (action == "zapret" && ctx.zapret_installed)
             return true;

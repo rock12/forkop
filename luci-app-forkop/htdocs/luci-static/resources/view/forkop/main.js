@@ -3254,7 +3254,7 @@ function getJsonOutbounds(section) {
 }
 function isConnectionAction(action) {
   return Boolean(
-    action && ["connection", "proxy", "outbound", "vpn", "amneziawg"].includes(action)
+    action && ["connection", "proxy", "outbound", "vpn", "amneziawg", "mieru"].includes(action)
   );
 }
 function hasSubscriptionSources(section) {
@@ -3980,9 +3980,14 @@ async function getDashboardSections(options = {}) {
           outbounds
         };
       }
-      if (sectionAction === "vpn") {
+      if (sectionAction === "vpn" || sectionAction === "amneziawg" || sectionAction === "mieru") {
         const outboundTag = getOutboundTagBySection(sectionName);
         const outbound = proxies.find((proxy) => proxy.code === outboundTag);
+        let fallbackType = "WireGuard";
+        if (sectionAction === "mieru") fallbackType = "Mieru";
+        else if (sectionAction === "amneziawg") fallbackType = "AmneziaWG";
+        let outName = section.interface || section.label || outbound?.value?.name || displayName;
+        if (sectionAction === "mieru") outName = "Mieru";
         return {
           withTagSelect: false,
           code: outbound?.code || sectionName,
@@ -3993,9 +3998,9 @@ async function getDashboardSections(options = {}) {
           outbounds: [
             {
               code: outbound?.code || sectionName,
-              displayName: section.interface || outbound?.value?.name || "",
+              displayName: outName,
               latency: outbound?.value?.history?.[0]?.delay || 0,
-              type: outbound?.value?.type || "",
+              type: outbound?.value?.type || fallbackType,
               selected: true,
               canCopyLink: false,
               runtimeAvailable: Boolean(outbound)
@@ -9273,7 +9278,7 @@ async function runSectionsCheck() {
           latency: `${latencyProxy.data.delay} ms`
         };
       }
-      if (section.action === "vpn" && selectedOutbound?.runtimeAvailable) {
+      if ((section.action === "vpn" || section.action === "amneziawg" || section.action === "mieru") && selectedOutbound?.runtimeAvailable) {
         return {
           state: "warning",
           latency: `[${selectedOutbound.displayName || section.code}] ${_("Connectivity probe failed")}`

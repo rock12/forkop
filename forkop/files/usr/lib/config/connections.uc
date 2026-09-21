@@ -310,6 +310,8 @@ function action(section) {
     if (act == "") {
         if (option(section, "awg_config", "") != "")
             act = "amneziawg";
+        else if (option(section, "mieru_server", "") != "")
+            act = "mieru";
         else if (length(outbound_jsons(section)) > 0 ||
                  length(connection_urls(section)) > 0 ||
                  length(subscription_urls(section)) > 0 ||

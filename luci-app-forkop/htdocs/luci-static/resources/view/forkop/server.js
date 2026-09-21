@@ -19,6 +19,7 @@ const ROUTING_SECTION_ACTIONS = [
   "zapret2",
   "udpspeeder",
   "amneziawg",
+  "mieru",
 ];
 const callNetworkInterfaceDump = rpc.declare({
   object: "network.interface",

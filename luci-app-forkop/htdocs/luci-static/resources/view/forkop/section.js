@@ -24,6 +24,8 @@ const ROUTING_ACTIONS = [
   "zapret2",
   "byedpi",
   "udpspeeder",
+  "amneziawg",
+  "mieru",
 ];
 const CONNECTIONS_BLOCKED_INTERFACES = [
   "br-lan",
@@ -82,7 +84,7 @@ function isOutboundDetourTargetSection(section, currentSectionId) {
     sectionName &&
     sectionName !== currentSectionId &&
     section.enabled !== "0" &&
-    ["connection", "proxy", "outbound", "vpn", "udpspeeder", "amneziawg"].includes(action)
+    ["connection", "proxy", "outbound", "vpn", "udpspeeder", "amneziawg", "mieru"].includes(action)
   );
 }
 
@@ -122,7 +124,7 @@ function isDnsDetourTargetSection(section, currentSectionId) {
     return false;
   }
 
-  if (["connection", "proxy", "outbound", "vpn", "amneziawg"].includes(action)) {
+  if (["connection", "proxy", "outbound", "vpn", "amneziawg", "mieru"].includes(action)) {
     return true;
   }
   if (action === "zapret") {
@@ -3915,14 +3917,15 @@ function validateOutboundJsonItemsBeforeSave(_section_id, values) {
 function cleanAwgHex(val) {
   if (!val) return "";
   let s = `${val}`.trim();
-  if (/^<b\s+0x[0-9a-fA-F]+>$/i.test(s)) return s;
-  if (/^<b\s+[0-9a-fA-F]+>$/i.test(s)) {
-    const hex = s.replace(/^<b\s+|>/gi, "").trim();
+  if (s === "0" || s === "") return "";
+  if (/^[0-9a-fA-F]+><[^<>]+>/.test(s)) s = "<b 0x" + s;
+  if (/<[^<>]+$/.test(s)) s = s + ">";
+  if (/^(<[^<>]+>)+$/.test(s)) return s;
+  let hex = s.toLowerCase().replace(/^0x/, "");
+  if (/^[0-9a-f]+$/.test(hex)) {
+    if (hex.length % 2 !== 0) hex += "0";
     return `<b 0x${hex}>`;
   }
-  if (s.startsWith("<b") && s.endsWith(">")) return s;
-  const m = s.match(/^(?:0x)?([0-9a-fA-F]+)$/i);
-  if (m) return `<b 0x${m[1]}>`;
   return s;
 }
 
@@ -4630,6 +4633,8 @@ function getActionOptionLabel(action) {
       return "UDPspeeder";
     case "amneziawg":
       return "AmneziaWG / WireGuard";
+    case "mieru":
+      return "Mieru";
     case "outbound":
       return _("JSON outbound");
     case "proxy":
@@ -4661,6 +4666,10 @@ function getRuleActionDisplayValue(section_id) {
     return "AmneziaWG";
   }
 
+  if (action === "mieru") {
+    return "Mieru";
+  }
+
   return getActionOptionLabel(action);
 }
 
@@ -4674,6 +4683,7 @@ function populateActionOptionValues(option) {
 
   option.value("connection", getActionOptionLabel("connection"));
   option.value("amneziawg", getActionOptionLabel("amneziawg"));
+  option.value("mieru", getActionOptionLabel("mieru"));
   option.value("bypass", "Bypass");
   option.value("block", "Block");
   option.value("dns", "DNS");
@@ -7582,6 +7592,7 @@ function createSectionContent(section) {
     const act = getRuleConfiguredAction(section_id);
     if (act) return act;
     if (uci.get(UCI_PACKAGE, section_id, "awg_config")) return "amneziawg";
+    if (uci.get(UCI_PACKAGE, section_id, "mieru_server")) return "mieru";
     return "connection";
   };
   o.write = function (section_id, value) {
@@ -8131,6 +8142,67 @@ function createSectionContent(section) {
     } catch (_err) {}
   };
 
+  // ── Mieru (sing-box-extended) ─────────────────────────────────────────────
+  o = section.taboption(
+    "settings",
+    form.Value,
+    "mieru_server",
+    _("Mieru Server"),
+    _("Server hostname or IP address"),
+  );
+  o.modalonly = true;
+  o.rmempty = false;
+  o.depends("action", "mieru");
+
+  o = section.taboption(
+    "settings",
+    form.Value,
+    "mieru_server_port",
+    _("Mieru Port / Port Range"),
+    _("Server port (e.g. 443) or port range (e.g. 10000-20000)"),
+  );
+  o.modalonly = true;
+  o.rmempty = false;
+  o.default = "10000-20000";
+  o.placeholder = "10000-20000";
+  o.depends("action", "mieru");
+
+  o = section.taboption(
+    "settings",
+    form.ListValue,
+    "mieru_transport",
+    _("Mieru Transport"),
+    _("Underlying transport protocol (TCP recommended)"),
+  );
+  o.modalonly = true;
+  o.value("TCP", "TCP");
+  o.value("UDP", "UDP");
+  o.default = "TCP";
+  o.depends("action", "mieru");
+
+  o = section.taboption(
+    "settings",
+    form.Value,
+    "mieru_username",
+    _("Mieru Username"),
+    _("Username configured on the Mieru server"),
+  );
+  o.modalonly = true;
+  o.rmempty = false;
+  o.depends("action", "mieru");
+
+  o = section.taboption(
+    "settings",
+    form.Value,
+    "mieru_password",
+    _("Mieru Password"),
+    _("Password configured on the Mieru server"),
+  );
+  o.modalonly = true;
+  o.rmempty = false;
+  o.password = true;
+  o.depends("action", "mieru");
+
   o = section.taboption(
     "settings",
     ButtonAddSettingsDynamicList,
@@ -8242,6 +8314,7 @@ function createSectionContent(section) {
   o.rmempty = false;
   o.depends("action", "connection");
   o.depends("action", "amneziawg");
+  o.depends("action", "mieru");
   o.modalonly = true;
   o.write = function (section_id, value) {
     if (value === "1") {
@@ -8278,6 +8351,7 @@ function createSectionContent(section) {
   o.rmempty = false;
   o.depends({ action: "connection", outbound_detour_enabled: "1" });
   o.depends({ action: "amneziawg", outbound_detour_enabled: "1" });
+  o.depends({ action: "mieru", outbound_detour_enabled: "1" });
   o.modalonly = true;
   o.load = function (section_id) {
     refreshOutboundDetourSectionOptionValues(this, section_id);

@@ -128,6 +128,56 @@ function int_option(section, key, fallback) {
     return int(value, 10);
 }
 
+function trim(str) {
+    return replace(as_string(str), /^[ \t\r\n]+|[ \t\r\n]+$/g, "");
+}
+
+function awg_tag_chain(value) {
+    value = trim(as_string(value));
+    if (value == "" || value == "0")
+        return "";
+
+    // Heal previously truncated tag chains (e.g. from broken conf import)
+    if (match(value, /^[0-9a-fA-F]+><[^<>]+>/))
+        value = "<b 0x" + value;
+    if (match(value, /<[^<>]+$/))
+        value = value + ">";
+
+    // A well-formed tag chain: keep it verbatim, including inner spacing
+    // ("<b 0x..>" carries a space inside each tag).
+    if (match(value, /^(<[^<>]+>)+$/))
+        return value;
+
+    // Classic AmneziaWG form: plain hex (with optional 0x prefix).
+    let hex = lc(value);
+    hex = replace(hex, /^0x/, "");
+    if (match(hex, /^[0-9a-f]+$/)) {
+        if (length(hex) % 2 != 0)
+            hex += "0";
+        return "<b 0x" + hex + ">";
+    }
+
+    // Unsupported shape: emit nothing rather than a value that would be
+    // silently dropped at runtime; validation reports it.
+    return "";
+}
+
+function extended_awg_schema_has_junk_signatures(version) {
+    let m = match(lc(as_string(version)), /extended-([0-9]+)\.([0-9]+)\.([0-9]+)/);
+    if (m == null)
+        return false;
+
+    let major = int(m[1], 10);
+    let minor = int(m[2], 10);
+    let patch = int(m[3], 10);
+
+    if (major < 2) return true;
+    if (major > 2) return false;
+    if (minor < 6) return true;
+    if (minor > 6) return false;
+    return patch <= 0;
+}
+
 return {
     as_string,
     read_json_file,
@@ -144,5 +194,9 @@ return {
     option,
     list_option,
     bool_option,
-    int_option
+    int_option,
+    trim,
+    awg_tag_chain,
+    extended_awg_schema_has_junk_signatures
 };
+

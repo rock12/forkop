@@ -316,7 +316,12 @@ function download_via_proxy_any_enabled(settings, sections) {
 
 function download_detour_tag(settings, purpose) {
     let section_name = download_via_proxy_section(settings, purpose);
-    return section_name == "" ? "" : outbound_tag(section_name);
+    if (section_name == "")
+        return "";
+    let cursor = uci_cursor();
+    if (cursor.get(CONFIG_NAME, section_name, "action") == "mieru")
+        return "";
+    return outbound_tag(section_name);
 }
 
 function ruleset_tag(section_name, name, kind) {
@@ -2027,22 +2032,10 @@ function manual_hysteria2_outbound(link, tag_name) {
 }
 
 function clean_awg_hex(value) {
-    value = as_string(value);
-    let m = match(value, /<b\s+0x([0-9a-fA-F]+)>/i);
-    if (m)
-        return sprintf("<b 0x%s>", m[1]);
-    m = match(value, /<b\s+([0-9a-fA-F]+)>/i);
-    if (m)
-        return sprintf("<b 0x%s>", m[1]);
-    if (starts_with(value, "<b") && index(value, ">") > 0)
-        return value;
-    m = match(value, /^0x([0-9a-fA-F]+)$/i);
-    if (m)
-        return sprintf("<b 0x%s>", m[1]);
-    let hex = replace(value, /[^0-9A-Fa-f]/g, "");
-    if (hex != "")
-        return sprintf("<b 0x%s>", hex);
-    return value;
+    let chain = common.awg_tag_chain(value);
+    if (chain != "")
+        return chain;
+    return as_string(value);
 }
 
 function manual_wireguard_outbound(link, tag_name) {
@@ -2083,16 +2076,43 @@ function manual_wireguard_outbound(link, tag_name) {
             has_amnezia = true;
         }
     }
-    for (let k in [ "i1", "i2" ]) {
+    for (let k in [ "i1", "i2", "i3", "i4", "i5" ]) {
         if (query[k] != null && query[k] != "") {
             amnezia[k] = clean_awg_hex(query[k]);
             has_amnezia = true;
         }
     }
+    if (common.extended_awg_schema_has_junk_signatures(runtime_sing_box_version)) {
+        for (let k in [ "j1", "j2", "j3" ]) {
+            if (query[k] != null && query[k] != "") {
+                amnezia[k] = clean_awg_hex(query[k]);
+                has_amnezia = true;
+            }
+        }
+        if (query.itime != null && int(query.itime) > 0) {
+            amnezia.itime = int(query.itime);
+            has_amnezia = true;
+        }
+    }
     let hpk = query.header_protection_key || query.headerprotectionkey || query.hpk || "";
     if (hpk != "") {
+        if (amnezia.s1 != null && amnezia.s1 < 12) amnezia.s1 = 20;
+        if (amnezia.s2 != null && amnezia.s2 < 12) amnezia.s2 = 20;
+        if (amnezia.s3 != null && amnezia.s3 < 12) amnezia.s3 = 20;
+        if (amnezia.s4 != null && amnezia.s4 < 12) amnezia.s4 = 20;
         amnezia.header_protection_key = hpk;
         has_amnezia = true;
+    }
+    let cpa = query.content_padding_addition || query.contentpaddingaddition || query.cpa || "";
+    if (cpa != "") {
+        amnezia.content_padding_addition = cpa;
+        has_amnezia = true;
+    }
+    for (let timing_opt in [ "rekey_after_time", "rekey_timeout", "reject_after_time", "keepalive_timeout", "max_handshake_attempts" ]) {
+        if (query[timing_opt] != null && query[timing_opt] != "") {
+            amnezia[timing_opt] = query[timing_opt];
+            has_amnezia = true;
+        }
     }
     if (has_amnezia)
         outbound.amnezia = amnezia;
@@ -2121,9 +2141,15 @@ function normalize_wireguard_endpoint(endpoint) {
         delete endpoint.local_address;
     }
     if (endpoint.amnezia) {
-        for (let k in [ "i1", "i2" ]) {
+        for (let k in [ "i1", "i2", "i3", "i4", "i5" ]) {
             if (endpoint.amnezia[k])
                 endpoint.amnezia[k] = clean_awg_hex(endpoint.amnezia[k]);
+        }
+        if (!common.extended_awg_schema_has_junk_signatures(runtime_sing_box_version)) {
+            delete endpoint.amnezia.j1;
+            delete endpoint.amnezia.j2;
+            delete endpoint.amnezia.j3;
+            delete endpoint.amnezia.itime;
         }
     }
     return endpoint;
@@ -2444,6 +2470,47 @@ function add_udpspeeder_outbound(config, section, sections) {
         type: "direct",
         tag: outbound_tag(section[".name"])
     });
+}
+
+function add_mieru_outbound(config, section) {
+    let outbound = {
+        type: "mieru",
+        tag: outbound_tag(section[".name"]),
+        server: option(section, "mieru_server", ""),
+        transport: option(section, "mieru_transport", "TCP"),
+        username: option(section, "mieru_username", ""),
+        password: option(section, "mieru_password", "")
+    };
+
+    let port_str = trim(option(section, "mieru_server_port", option(section, "mieru_port", "")));
+    if (match(port_str, /[-,\s]/)) {
+        let parts = split(port_str, /[,\s]+/);
+        let cleaned = [];
+        for (let p in parts) {
+            p = trim(p);
+            if (p != "") push(cleaned, p);
+        }
+        if (length(cleaned) == 1)
+            outbound.server_ports = cleaned[0];
+        else if (length(cleaned) > 1)
+            outbound.server_ports = cleaned;
+    } else if (port_str != "") {
+        outbound.server_port = int(port_str, 10);
+    }
+
+    let traffic_pattern = option(section, "mieru_traffic_pattern", "");
+    if (traffic_pattern != "")
+        outbound.traffic_pattern = traffic_pattern;
+
+    let mtu = int_option(section, "mieru_mtu", "0");
+    if (mtu > 0)
+        outbound.mtu = mtu;
+
+    let detour = outbound_detour_tag_for_section(section);
+    if (detour != "")
+        outbound.detour = detour;
+
+    push(config.outbounds, outbound);
 }
 
 function ensure_community_ruleset(config, section_name, community) {
@@ -3049,6 +3116,8 @@ function add_outbound_for_section(config, section, taken, sections) {
         add_byedpi_outbound(config, section, sections);
     else if (action == "udpspeeder")
         add_udpspeeder_outbound(config, section, sections);
+    else if (action == "mieru")
+        add_mieru_outbound(config, section);
     else if (action == "bypass") {
         /* route-only action */
     }
@@ -3067,7 +3136,7 @@ function reserve_section_outbound_tags(sections, taken) {
     for (let section in sections) {
         let action = connections.action(section);
         if (connections.is_connections_action(action) ||
-            action == "byedpi" || action == "zapret" || action == "zapret2" || action == "udpspeeder")
+            action == "byedpi" || action == "zapret" || action == "zapret2" || action == "udpspeeder" || action == "mieru")
             taken[outbound_tag(section[".name"])] = true;
 
         if (!connections.is_connections_action(action))
