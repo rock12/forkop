@@ -1955,6 +1955,12 @@ else if (mode == "byedpi-runtime-signature-fixture") {
     let data = fixture_data(ARGV[1]);
     exit(print_signature_hash(byedpi_runtime_signature_body(fixture_section_list(data))) ? 0 : 1);
 }
+else if (mode == "udpspeeder-runtime-signature")
+    exit(print_signature_hash(udpspeeder_runtime_signature_body(uci_sections("section"))) ? 0 : 1);
+else if (mode == "udpspeeder-runtime-signature-fixture") {
+    let data = fixture_data(ARGV[1]);
+    exit(print_signature_hash(udpspeeder_runtime_signature_body(fixture_section_list(data))) ? 0 : 1);
+}
 else if (mode == "dont-touch-dhcp")
     print(dont_touch_dhcp_value(uci_settings()), "\n");
 else if (mode == "dont-touch-dhcp-fixture") {
