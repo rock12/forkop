@@ -4372,36 +4372,6 @@ function showAmneziaWgImportModal(section_id) {
           const mtuVal = parseInt(document.getElementById("fkp-awg-mtu").value, 10);
           const pskVal = (document.getElementById("fkp-awg-psk").value || "").trim();
 
-          const outboundObj = {
-            type: "wireguard",
-            tag: tag,
-            server: server,
-            server_port: port,
-            local_address: addrs,
-            private_key: privKey,
-            peer_public_key: pubKey,
-          };
-          if (pskVal) outboundObj.pre_shared_key = pskVal;
-          if (mtuVal && !isNaN(mtuVal)) outboundObj.mtu = mtuVal;
-
-          const awgObj = {};
-          ["jc", "jmin", "jmax", "s1", "s2", "s3", "s4", "h1", "h2", "h3", "h4"].forEach((k) => {
-            const val = document.getElementById(`fkp-awg-${k}`).value;
-            if (val !== "" && !isNaN(parseInt(val, 10))) {
-              awgObj[k] = parseInt(val, 10);
-            }
-          });
-          const i1 = cleanAwgHex(document.getElementById("fkp-awg-i1").value);
-          if (i1) awgObj.i1 = i1;
-          const i2 = cleanAwgHex(document.getElementById("fkp-awg-i2").value);
-          if (i2) awgObj.i2 = i2;
-          const hpk = (document.getElementById("fkp-awg-hpk").value || "").trim();
-          if (hpk) awgObj.header_protection_key = hpk;
-
-          if (Object.keys(awgObj).length > 0) {
-            outboundObj.amnezia = awgObj;
-          }
-
           const setVal = (opt, val) => {
             if (val === undefined || val === null) return;
             const str = String(val);
