@@ -3915,10 +3915,14 @@ function validateOutboundJsonItemsBeforeSave(_section_id, values) {
 function cleanAwgHex(val) {
   if (!val) return "";
   let s = `${val}`.trim();
-  const m = s.match(/0x([0-9a-fA-F]+)/i);
-  if (m) return m[1].toLowerCase();
-  s = s.replace(/^[<b\s]+|[>]+$/gi, "").trim();
-  if (/^[0-9a-fA-F]+$/.test(s)) return s.toLowerCase();
+  if (/^<b\s+0x[0-9a-fA-F]+>$/i.test(s)) return s;
+  if (/^<b\s+[0-9a-fA-F]+>$/i.test(s)) {
+    const hex = s.replace(/^<b\s+|>/gi, "").trim();
+    return `<b 0x${hex}>`;
+  }
+  if (s.startsWith("<b") && s.endsWith(">")) return s;
+  const m = s.match(/^(?:0x)?([0-9a-fA-F]+)$/i);
+  if (m) return `<b 0x${m[1]}>`;
   return s;
 }
 

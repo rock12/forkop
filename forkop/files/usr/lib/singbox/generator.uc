@@ -2028,12 +2028,21 @@ function manual_hysteria2_outbound(link, tag_name) {
 
 function clean_awg_hex(value) {
     value = as_string(value);
-    let m = match(value, /<b 0x([0-9a-fA-F]+)>/);
+    let m = match(value, /<b\s+0x([0-9a-fA-F]+)>/i);
     if (m)
-        return m[1];
-    if (starts_with(value, "0x") || starts_with(value, "0X"))
-        value = substr(value, 2);
-    return replace(value, /[^0-9A-Fa-f]/g, "");
+        return sprintf("<b 0x%s>", m[1]);
+    m = match(value, /<b\s+([0-9a-fA-F]+)>/i);
+    if (m)
+        return sprintf("<b 0x%s>", m[1]);
+    if (starts_with(value, "<b") && index(value, ">") > 0)
+        return value;
+    m = match(value, /^0x([0-9a-fA-F]+)$/i);
+    if (m)
+        return sprintf("<b 0x%s>", m[1]);
+    let hex = replace(value, /[^0-9A-Fa-f]/g, "");
+    if (hex != "")
+        return sprintf("<b 0x%s>", hex);
+    return value;
 }
 
 function manual_wireguard_outbound(link, tag_name) {
@@ -2110,6 +2119,12 @@ function normalize_wireguard_endpoint(endpoint) {
     if (endpoint.local_address && !endpoint.address) {
         endpoint.address = endpoint.local_address;
         delete endpoint.local_address;
+    }
+    if (endpoint.amnezia) {
+        for (let k in [ "i1", "i2" ]) {
+            if (endpoint.amnezia[k])
+                endpoint.amnezia[k] = clean_awg_hex(endpoint.amnezia[k]);
+        }
     }
     return endpoint;
 }

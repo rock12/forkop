@@ -24,6 +24,7 @@ ensure_stable_ref() {
   fi
 
   git -C "$ROOT_DIR" fetch --force --depth=1 origin "refs/tags/$STABLE_REF:refs/tags/$STABLE_REF" >/dev/null 2>&1 ||
+    git -C "$ROOT_DIR" fetch --force --depth=1 https://github.com/ushan0v/forkop.git "refs/tags/$STABLE_REF:refs/tags/$STABLE_REF" >/dev/null 2>&1 ||
     fail "stable ref is unavailable and could not be fetched: $STABLE_REF"
 }
 
