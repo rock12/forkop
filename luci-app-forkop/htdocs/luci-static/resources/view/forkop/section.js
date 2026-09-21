@@ -82,7 +82,7 @@ function isOutboundDetourTargetSection(section, currentSectionId) {
     sectionName &&
     sectionName !== currentSectionId &&
     section.enabled !== "0" &&
-    ["connection", "proxy", "outbound", "vpn"].includes(action)
+    ["connection", "proxy", "outbound", "vpn", "udpspeeder", "amneziawg"].includes(action)
   );
 }
 
@@ -122,7 +122,7 @@ function isDnsDetourTargetSection(section, currentSectionId) {
     return false;
   }
 
-  if (["connection", "proxy", "outbound", "vpn"].includes(action)) {
+  if (["connection", "proxy", "outbound", "vpn", "amneziawg"].includes(action)) {
     return true;
   }
   if (action === "zapret") {
@@ -1747,7 +1747,7 @@ function isDownloadThroughTargetSection(section, currentSectionId) {
     return false;
   }
 
-  if (["connection", "proxy", "outbound", "vpn"].includes(action)) {
+  if (["connection", "proxy", "outbound", "vpn", "amneziawg"].includes(action)) {
     return true;
   }
 
@@ -4397,12 +4397,28 @@ function showAmneziaWgImportModal(section_id) {
             }
           }
 
+          const rawInputVal = (document.getElementById("fkp-awg-raw-input").value || "").trim();
+          if (rawInputVal) {
+            uci.set(UCI_PACKAGE, section_id, "awg_config", rawInputVal);
+          }
+
           ui.hideModal();
           ui.addNotification(null, E("p", {}, _("AmneziaWG / WireGuard outbound added successfully!")), "info");
         },
       }, _("Save Outbound")),
     ]),
   ]);
+
+  const existingAwgConfig = uci.get(UCI_PACKAGE, section_id, "awg_config");
+  if (existingAwgConfig) {
+    setTimeout(() => {
+      const rawEl = document.getElementById("fkp-awg-raw-input");
+      if (rawEl) {
+        rawEl.value = existingAwgConfig;
+        doParse(existingAwgConfig);
+      }
+    }, 50);
+  }
 }
 
 function showRuleSetSettingsModal(section_id, itemValue, option, widget) {
@@ -4599,6 +4615,8 @@ function getActionOptionLabel(action) {
       return "ByeDPI";
     case "udpspeeder":
       return "UDPspeeder";
+    case "amneziawg":
+      return "AmneziaWG / WireGuard";
     case "outbound":
       return _("JSON outbound");
     case "proxy":
@@ -4626,6 +4644,10 @@ function getRuleActionDisplayValue(section_id) {
     return "UDPspeeder";
   }
 
+  if (action === "amneziawg") {
+    return "AmneziaWG";
+  }
+
   return getActionOptionLabel(action);
 }
 
@@ -4638,6 +4660,7 @@ function populateActionOptionValues(option) {
   delete option.vallist;
 
   option.value("connection", getActionOptionLabel("connection"));
+  option.value("amneziawg", getActionOptionLabel("amneziawg"));
   option.value("bypass", "Bypass");
   option.value("block", "Block");
   option.value("dns", "DNS");
@@ -8016,6 +8039,7 @@ function createSectionContent(section) {
     _("Custom outbound configurations in JSON format"),
   );
   o.depends("action", "connection");
+  o.depends("action", "amneziawg");
   o.rmempty = true;
   o.modalonly = true;
   o.addButtonLabel = _("+ Add JSON outbound");
@@ -8043,11 +8067,48 @@ function createSectionContent(section) {
     _("Import AmneziaWG (AWG 1.0 / 2.0 / 3.1) or standard WireGuard configuration (.conf file, vpn:// link, or text)"),
   );
   o.depends("action", "connection");
+  o.depends("action", "amneziawg");
   o.modalonly = true;
   o.inputtitle = _("+ Add AmneziaWG / WireGuard");
   o.inputstyle = "action";
   o.onclick = function (_ev, section_id) {
     showAmneziaWgImportModal(section_id);
+  };
+
+  o = section.taboption(
+    "settings",
+    form.TextValue,
+    "awg_config",
+    _("AmneziaWG Configuration (.conf / vpn://)"),
+    _("Paste AmneziaWG / WireGuard configuration (.conf format or vpn:// / awg:// link). If specified, it will be automatically converted to the sing-box endpoint on save."),
+  );
+  o.depends("action", "amneziawg");
+  o.rows = 8;
+  o.wrap = "off";
+  o.textarea = true;
+  o.modalonly = true;
+  o.placeholder = "[Interface]\nPrivateKey = ...\nAddress = 172.16.0.2/32\nJc = 4\nJmin = 40\nJmax = 70\nS1 = 0\nS2 = 0\nH1 = 1\nH2 = 2\nH3 = 3\nH4 = 4\n\n[Peer]\nPublicKey = ...\nEndpoint = 198.51.100.1:51820\nAllowedIPs = 0.0.0.0/0";
+  o.load = function (section_id) {
+    return uci.get(UCI_PACKAGE, section_id, "awg_config") || "";
+  };
+  o.write = function (section_id, value) {
+    const trimmed = `${value || ""}`.trim();
+    if (!trimmed) {
+      uci.unset(UCI_PACKAGE, section_id, "awg_config");
+      return;
+    }
+    uci.set(UCI_PACKAGE, section_id, "awg_config", trimmed);
+    try {
+      return parseAmneziaOrWgInput(trimmed).then((outbound) => {
+        if (outbound) {
+          if (!outbound.tag) {
+            outbound.tag = uci.get(UCI_PACKAGE, section_id, "label") || section_id;
+          }
+          const jsonStr = JSON.stringify(outbound);
+          writeListOption(section_id, "outbound_jsons", [jsonStr]);
+        }
+      }).catch((_e) => {});
+    } catch (_err) {}
   };
 
   o = section.taboption(
@@ -8160,6 +8221,7 @@ function createSectionContent(section) {
   o.default = "0";
   o.rmempty = false;
   o.depends("action", "connection");
+  o.depends("action", "amneziawg");
   o.modalonly = true;
   o.write = function (section_id, value) {
     if (value === "1") {
@@ -8195,6 +8257,7 @@ function createSectionContent(section) {
   );
   o.rmempty = false;
   o.depends({ action: "connection", outbound_detour_enabled: "1" });
+  o.depends({ action: "amneziawg", outbound_detour_enabled: "1" });
   o.modalonly = true;
   o.load = function (section_id) {
     refreshOutboundDetourSectionOptionValues(this, section_id);

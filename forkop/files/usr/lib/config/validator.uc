@@ -809,11 +809,11 @@ function rule_action(section) {
 }
 
 function rule_action_supported(action) {
-    return contains([ "connection", "proxy", "outbound", "vpn", "bypass", "block", "dns", "zapret", "zapret2", "byedpi" ], as_string(action));
+    return contains([ "connection", "proxy", "outbound", "vpn", "bypass", "block", "dns", "zapret", "zapret2", "byedpi", "udpspeeder", "amneziawg" ], as_string(action));
 }
 
 function server_routing_section_action_supported(action) {
-    return contains([ "connection", "proxy", "outbound", "vpn", "zapret", "zapret2", "byedpi" ], as_string(action));
+    return contains([ "connection", "proxy", "outbound", "vpn", "zapret", "zapret2", "byedpi", "udpspeeder", "amneziawg" ], as_string(action));
 }
 
 function duration_to_seconds_value(value) {
@@ -1947,6 +1947,8 @@ function has_outbound_section(ctx) {
         if (action == "byedpi" && ctx.byedpi_installed)
             return true;
         if (action == "udpspeeder")
+            return true;
+        if (action == "amneziawg")
             return true;
         if (action == "zapret" && ctx.zapret_installed)
             return true;

@@ -1503,7 +1503,7 @@ function apply_section_detour_to_connection_outbounds(config, start_index, detou
 
 function mixed_proxy_enabled_action(action) {
     return action == "connection" || action == "proxy" || action == "outbound" || action == "vpn" ||
-        action == "byedpi" || action == "zapret" || action == "zapret2" || action == "udpspeeder";
+        action == "byedpi" || action == "zapret" || action == "zapret2" || action == "udpspeeder" || action == "amneziawg";
 }
 
 function add_mixed_proxy_for_section(config, section, service_address) {

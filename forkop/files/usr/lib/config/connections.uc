@@ -297,7 +297,7 @@ function is_legacy_connection_action(action) {
 
 function is_connections_action(action) {
     action = as_string(action);
-    return action == "connection" || is_legacy_connection_action(action);
+    return action == "connection" || action == "amneziawg" || is_legacy_connection_action(action);
 }
 
 function normalize_action(action) {
