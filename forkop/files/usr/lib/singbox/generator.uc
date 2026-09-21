@@ -2140,6 +2140,16 @@ function normalize_wireguard_endpoint(endpoint) {
         endpoint.address = endpoint.local_address;
         delete endpoint.local_address;
     }
+    if (type(endpoint.address) == "array") {
+        let fixed_addrs = [];
+        for (let addr in endpoint.address) {
+            addr = as_string(addr);
+            if (index(addr, ":") >= 0 && match(addr, /\/32$/))
+                addr = replace(addr, /\/32$/, "/128");
+            push(fixed_addrs, addr);
+        }
+        endpoint.address = fixed_addrs;
+    }
     if (endpoint.amnezia) {
         for (let k in [ "i1", "i2", "i3", "i4", "i5" ]) {
             if (endpoint.amnezia[k])

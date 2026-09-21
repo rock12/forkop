@@ -3959,7 +3959,15 @@ function parseAwgIni(text) {
   if (iface.address) {
     iface.address.split(",").forEach((a) => {
       const trimmed = a.trim();
-      if (trimmed) addresses.push(trimmed.includes("/") ? trimmed : `${trimmed}/32`);
+      if (trimmed) {
+        if (trimmed.includes("/")) {
+          addresses.push(trimmed);
+        } else if (trimmed.includes(":")) {
+          addresses.push(`${trimmed}/128`);
+        } else {
+          addresses.push(`${trimmed}/32`);
+        }
+      }
     });
   }
 
