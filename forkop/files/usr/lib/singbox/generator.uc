@@ -49,7 +49,7 @@ let url_query_params = runtime_url.query_params;
 
 const CONFIG_NAME = "forkop";
 
-function sing_box_uses_legacy_independent_cache(value) {
+function sing_box_is_legacy_pre_114(value) {
     let matched = match(as_string(value), /^v?([0-9]+)[.]([0-9]+)/);
     if (matched == null)
         return true;
@@ -503,7 +503,7 @@ function base_config(settings, service_address, runtime_context) {
             clash_api: clash_api_config(settings, service_address)
         }
     };
-    if (sing_box_uses_legacy_independent_cache(runtime_sing_box_version))
+    if (sing_box_is_legacy_pre_114(runtime_sing_box_version))
         result.dns.independent_cache = true;
     return result;
 }
@@ -2501,27 +2501,36 @@ function add_source_dns_matchers(rule, source_ip_cidr) {
 }
 
 function add_source_aware_bypass_dns_rules(config, matchers, rewrite_ttl) {
-    push_dns_matcher_rule(config, {
-        type: "logical",
-        mode: "and",
-        rules: [
-            copy_dns_matchers(matchers),
-            {
-                ip_cidr: [ runtime_constants.FAKEIP_INET4_RANGE, runtime_constants.FAKEIP_INET6_RANGE ],
-                invert: true
-            }
-        ],
-        action: "route",
-        server: runtime_constants.DNSMASQ_DNS_SERVER_TAG,
-        rewrite_ttl
-    });
+    if (sing_box_is_legacy_pre_114(runtime_sing_box_version)) {
+        push_dns_matcher_rule(config, {
+            type: "logical",
+            mode: "and",
+            rules: [
+                copy_dns_matchers(matchers),
+                {
+                    ip_cidr: [ runtime_constants.FAKEIP_INET4_RANGE, runtime_constants.FAKEIP_INET6_RANGE ],
+                    invert: true
+                }
+            ],
+            action: "route",
+            server: runtime_constants.DNSMASQ_DNS_SERVER_TAG,
+            rewrite_ttl
+        });
 
-    let fallback = copy_dns_matchers(matchers);
-    fallback.action = "route";
-    fallback.server = runtime_constants.DNS_SERVER_TAG;
-    fallback.query_type = [ "A", "AAAA" ];
-    fallback.rewrite_ttl = rewrite_ttl;
-    push_dns_matcher_rule(config, fallback);
+        let fallback = copy_dns_matchers(matchers);
+        fallback.action = "route";
+        fallback.server = runtime_constants.DNS_SERVER_TAG;
+        fallback.query_type = [ "A", "AAAA" ];
+        fallback.rewrite_ttl = rewrite_ttl;
+        push_dns_matcher_rule(config, fallback);
+        return;
+    }
+
+    let bypass_rule = copy_dns_matchers(matchers);
+    bypass_rule.action = "route";
+    bypass_rule.server = runtime_constants.DNSMASQ_DNS_SERVER_TAG;
+    bypass_rule.rewrite_ttl = rewrite_ttl;
+    push_dns_matcher_rule(config, bypass_rule);
 }
 
 function add_section_dns_matcher_rule(config, section, matchers, rewrite_ttl) {
