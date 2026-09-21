@@ -37,6 +37,8 @@ let option = common.option;
 let list_option = common.list_option;
 let bool_option = common.bool_option;
 let int_option = common.int_option;
+let int_or_range_option = common.int_or_range_option;
+let trim = common.trim;
 let url_decode = runtime_url.decode;
 let url_scheme = runtime_url.scheme;
 let url_fragment = runtime_url.fragment;
@@ -2475,11 +2477,251 @@ function add_byedpi_outbound(config, section, sections) {
     });
 }
 
-function add_udpspeeder_outbound(config, section, sections) {
-    push(config.outbounds, {
-        type: "direct",
-        tag: outbound_tag(section[".name"])
-    });
+function parse_awg_ini(text) {
+    let out = {};
+    let cur = null;
+    for (let raw in split(as_string(text), /\r?\n/)) {
+        let line = trim(raw);
+        if (line == "" || match(line, /^[#;]/))
+            continue;
+        let sm = match(line, /^\[([^\]]+)\]$/);
+        if (sm) {
+            cur = lc(trim(sm[1]));
+            out[cur] = out[cur] || {};
+            continue;
+        }
+        let kv = match(line, /^([^=]+)\s*=\s*(.+)$/);
+        if (kv && cur) {
+            let key = lc(trim(kv[1]));
+            let val = trim(kv[2]);
+            if (!match(val, /^</)) {
+                let comment_idx = index(val, "#");
+                if (comment_idx >= 0) val = trim(substr(val, 0, comment_idx));
+                comment_idx = index(val, ";");
+                if (comment_idx >= 0) val = trim(substr(val, 0, comment_idx));
+            }
+            out[cur][key] = val;
+        }
+    }
+    return out;
+}
+
+function add_awg_endpoint(config, section) {
+    let tag = outbound_tag(section[".name"]);
+
+    let server_address = option(section, "awg_server_address", "");
+    let server_port = int_option(section, "awg_server_port", "0");
+    let local_addrs = list_option(section, "awg_local_address");
+    let private_key = option(section, "awg_private_key", "");
+    let peer_public_key = option(section, "awg_peer_public_key", "");
+    let preshared_key = option(section, "awg_preshared_key", "");
+    let mtu_val = int_option(section, "awg_mtu", "1280");
+    let keepalive_val = int_or_range_option(section, "awg_keepalive", 25);
+
+    let jc_val = option(section, "awg_jc", "");
+    let jmin_val = option(section, "awg_jmin", "");
+    let jmax_val = option(section, "awg_jmax", "");
+    let s1_val = option(section, "awg_s1", "");
+    let s2_val = option(section, "awg_s2", "");
+    let h1_val = option(section, "awg_h1", "");
+    let h2_val = option(section, "awg_h2", "");
+    let h3_val = option(section, "awg_h3", "");
+    let h4_val = option(section, "awg_h4", "");
+    let s3_val = option(section, "awg_s3", "");
+    let s4_val = option(section, "awg_s4", "");
+
+    let i1_val = option(section, "awg_i1", "");
+    let i2_val = option(section, "awg_i2", "");
+    let i3_val = option(section, "awg_i3", "");
+    let i4_val = option(section, "awg_i4", "");
+    let i5_val = option(section, "awg_i5", "");
+
+    let awg_cfg_raw = option(section, "awg_config", "");
+    if (server_address == "" && awg_cfg_raw != "") {
+        let ini = parse_awg_ini(awg_cfg_raw);
+        if (ini.peer && ini.peer.endpoint) {
+            let ep_parts = split(ini.peer.endpoint, ":");
+            if (length(ep_parts) >= 2) {
+                server_port = int(ep_parts[length(ep_parts) - 1], 10);
+                server_address = join(":", slice(ep_parts, 0, length(ep_parts) - 1));
+            }
+        }
+        if (ini.peer) {
+            if (peer_public_key == "" && ini.peer.publickey) peer_public_key = ini.peer.publickey;
+            if (preshared_key == "" && ini.peer.presharedkey) preshared_key = ini.peer.presharedkey;
+            if (ini.peer.persistentkeepalive) keepalive_val = int(ini.peer.persistentkeepalive, 10);
+        }
+        if (ini.interface) {
+            if (private_key == "" && ini.interface.privatekey) private_key = ini.interface.privatekey;
+            if (length(local_addrs) == 0 && ini.interface.address) {
+                local_addrs = split(ini.interface.address, /[,\s]+/);
+            }
+            if (ini.interface.mtu) mtu_val = int(ini.interface.mtu, 10);
+            if (jc_val == "" && ini.interface.jc) jc_val = ini.interface.jc;
+            if (jmin_val == "" && ini.interface.jmin) jmin_val = ini.interface.jmin;
+            if (jmax_val == "" && ini.interface.jmax) jmax_val = ini.interface.jmax;
+            if (s1_val == "" && ini.interface.s1) s1_val = ini.interface.s1;
+            if (s2_val == "" && ini.interface.s2) s2_val = ini.interface.s2;
+            if (h1_val == "" && ini.interface.h1) h1_val = ini.interface.h1;
+            if (h2_val == "" && ini.interface.h2) h2_val = ini.interface.h2;
+            if (h3_val == "" && ini.interface.h3) h3_val = ini.interface.h3;
+            if (h4_val == "" && ini.interface.h4) h4_val = ini.interface.h4;
+            if (s3_val == "" && ini.interface.s3) s3_val = ini.interface.s3;
+            if (s4_val == "" && ini.interface.s4) s4_val = ini.interface.s4;
+            if (i1_val == "" && ini.interface.i1) i1_val = ini.interface.i1;
+            if (i2_val == "" && ini.interface.i2) i2_val = ini.interface.i2;
+            if (i3_val == "" && ini.interface.i3) i3_val = ini.interface.i3;
+            if (i4_val == "" && ini.interface.i4) i4_val = ini.interface.i4;
+            if (i5_val == "" && ini.interface.i5) i5_val = ini.interface.i5;
+        }
+    }
+
+    let endpoint = {
+        type: "wireguard",
+        tag: tag,
+        name: tag,
+        address: local_addrs,
+        private_key: private_key,
+        peers: [{
+            address: server_address,
+            port: server_port > 0 ? server_port : 51820,
+            public_key: peer_public_key,
+            allowed_ips: ["0.0.0.0/0", "::/0"]
+        }]
+    };
+
+    if (preshared_key != "")
+        endpoint.peers[0].pre_shared_key = preshared_key;
+
+    endpoint.mtu = mtu_val > 0 ? mtu_val : 1280;
+
+    if (type(keepalive_val) == "string") {
+        let m = match(keepalive_val, /^([0-9]+)/);
+        endpoint.peers[0].persistent_keepalive_interval = m ? int(m[1], 10) : 25;
+    } else {
+        endpoint.peers[0].persistent_keepalive_interval = keepalive_val > 0 ? keepalive_val : 25;
+    }
+
+    let jc = int(jc_val || 4, 10);
+    if (jc > 10) jc = 10;
+    let jmin = int(jmin_val || 40, 10);
+    let jmax = int(jmax_val || 70, 10);
+    if (jmax > 1200) jmax = 1200;
+
+    let amnezia = {
+        jc: jc,
+        jmin: jmin,
+        jmax: jmax,
+        s1: int(s1_val || 0, 10),
+        s2: int(s2_val || 0, 10),
+        h1: match(as_string(h1_val), /^[0-9]+-[0-9]+$/) ? h1_val : int(h1_val || 1, 10),
+        h2: match(as_string(h2_val), /^[0-9]+-[0-9]+$/) ? h2_val : int(h2_val || 2, 10),
+        h3: match(as_string(h3_val), /^[0-9]+-[0-9]+$/) ? h3_val : int(h3_val || 3, 10),
+        h4: match(as_string(h4_val), /^[0-9]+-[0-9]+$/) ? h4_val : int(h4_val || 4, 10),
+        s3: int(s3_val || 0, 10),
+        s4: int(s4_val || 0, 10)
+    };
+
+    let i1 = common.awg_tag_chain(i1_val);
+    let i2 = common.awg_tag_chain(i2_val);
+    let i3 = common.awg_tag_chain(i3_val);
+    let i4 = common.awg_tag_chain(i4_val);
+    let i5 = common.awg_tag_chain(i5_val);
+
+    if (i1 != "") amnezia.i1 = i1;
+    if (i2 != "") amnezia.i2 = i2;
+    if (i3 != "" && i3 != "0") amnezia.i3 = i3;
+    if (i4 != "" && i4 != "0") amnezia.i4 = i4;
+    if (i5 != "" && i5 != "0") amnezia.i5 = i5;
+
+    let j1 = common.awg_tag_chain(option(section, "awg_j1", ""));
+    let j2 = common.awg_tag_chain(option(section, "awg_j2", ""));
+    let j3 = common.awg_tag_chain(option(section, "awg_j3", ""));
+    let itime = int_option(section, "awg_itime", "0");
+
+    if (common.extended_awg_schema_has_junk_signatures(runtime_sing_box_version)) {
+        if (j1 != "") amnezia.j1 = j1;
+        if (j2 != "") amnezia.j2 = j2;
+        if (j3 != "") amnezia.j3 = j3;
+        if (itime > 0) amnezia.itime = itime;
+    }
+
+    endpoint.amnezia = amnezia;
+
+    let awg_ver = option(section, "awg_version", "");
+    if (awg_ver == "") {
+        if (option(section, "awg_rekey_after_time", "") != "" || option(section, "awg_rekey_timeout", "") != "" ||
+            option(section, "awg_reject_after_time", "") != "" || option(section, "awg_keepalive_timeout", "") != "" ||
+            option(section, "awg_max_handshake_attempts", "") != "" ||
+            bool_option(section, "awg_random_trailers", false) || bool_option(section, "awg_disable_cookies", false)) {
+            awg_ver = "3.1";
+        } else if (option(section, "awg_header_protection_key", "") != "" || option(section, "awg_content_padding_addition", "") != "") {
+            awg_ver = "3.0";
+        } else {
+            awg_ver = "2.0";
+        }
+    }
+
+    if (awg_ver == "3.0" || awg_ver == "3.1") {
+        let hpk = option(section, "awg_header_protection_key", "");
+        if (hpk != "") {
+            if (endpoint.amnezia.s1 < 12) endpoint.amnezia.s1 = 20;
+            if (endpoint.amnezia.s2 < 12) endpoint.amnezia.s2 = 20;
+            if (endpoint.amnezia.s3 < 12) endpoint.amnezia.s3 = 20;
+            if (endpoint.amnezia.s4 < 12) endpoint.amnezia.s4 = 20;
+            endpoint.amnezia.header_protection_key = hpk;
+        }
+
+        let cpa = option(section, "awg_content_padding_addition", "");
+        if (cpa != "") {
+            endpoint.amnezia.content_padding_addition = cpa;
+        }
+    }
+
+    if (awg_ver == "3.1") {
+        let rka = option(section, "awg_rekey_after_time", "");
+        if (rka != "") endpoint.amnezia.rekey_after_time = rka;
+
+        let rkt = option(section, "awg_rekey_timeout", "");
+        if (rkt != "") endpoint.amnezia.rekey_timeout = rkt;
+
+        let rja = option(section, "awg_reject_after_time", "");
+        if (rja != "") endpoint.amnezia.reject_after_time = rja;
+
+        let kpt = option(section, "awg_keepalive_timeout", "");
+        if (kpt != "") endpoint.amnezia.keepalive_timeout = kpt;
+
+        let mha = option(section, "awg_max_handshake_attempts", "");
+        if (mha != "") endpoint.amnezia.max_handshake_attempts = mha;
+    }
+
+    let detour = outbound_detour_tag_for_section(section);
+    if (detour == "") {
+        let legacy_detour = option(section, "awg_detour", "");
+        if (legacy_detour != "")
+            detour = outbound_tag(legacy_detour);
+    }
+    if (detour != "") {
+        endpoint.detour = detour;
+    }
+
+    if (type(endpoint.address) == "array") {
+        let fixed_addrs = [];
+        for (let addr in endpoint.address) {
+            addr = as_string(addr);
+            if (index(addr, ":") >= 0 && match(addr, /\/32$/))
+                addr = replace(addr, /\/32$/, "/128");
+            else if (index(addr, ":") >= 0 && index(addr, "/") < 0)
+                addr = addr + "/128";
+            else if (index(addr, ".") >= 0 && index(addr, "/") < 0)
+                addr = addr + "/32";
+            push(fixed_addrs, addr);
+        }
+        endpoint.address = fixed_addrs;
+    }
+
+    config.endpoints = config.endpoints || [];
+    push(config.endpoints, endpoint);
 }
 
 function add_mieru_outbound(config, section) {
@@ -3118,6 +3360,8 @@ function add_outbound_for_section(config, section, taken, sections) {
 
     if (connections.is_connections_action(action))
         add_connections_outbound(config, section, taken);
+    else if (action == "awg" || action == "amneziawg")
+        add_awg_endpoint(config, section);
     else if (action == "zapret")
         add_zapret_outbound(config, section, sections);
     else if (action == "zapret2")
@@ -3146,6 +3390,7 @@ function reserve_section_outbound_tags(sections, taken) {
     for (let section in sections) {
         let action = connections.action(section);
         if (connections.is_connections_action(action) ||
+            action == "awg" || action == "amneziawg" ||
             action == "byedpi" || action == "zapret" || action == "zapret2" || action == "udpspeeder" || action == "mieru")
             taken[outbound_tag(section[".name"])] = true;
 
@@ -3171,7 +3416,8 @@ function add_service_route_rules(config, sections) {
     for (let section in sections) {
         let action = connections.action(section);
         if (connections.is_connections_action(action) ||
-            action == "byedpi" || action == "zapret" || action == "zapret2" || action == "udpspeeder") {
+            action == "awg" || action == "amneziawg" ||
+            action == "byedpi" || action == "zapret" || action == "zapret2" || action == "udpspeeder" || action == "mieru") {
             first = section;
             break;
         }

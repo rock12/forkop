@@ -297,19 +297,27 @@ function is_legacy_connection_action(action) {
 
 function is_connections_action(action) {
     action = as_string(action);
-    return action == "connection" || action == "amneziawg" || is_legacy_connection_action(action);
+    return action == "connection" || is_legacy_connection_action(action);
+}
+
+function is_remote_proxy_action(action) {
+    action = as_string(action);
+    return is_connections_action(action) ||
+        action == "awg" || action == "amneziawg" || action == "mieru";
 }
 
 function normalize_action(action) {
     action = as_string(action);
+    if (action == "amneziawg")
+        return "awg";
     return is_connections_action(action) ? "connection" : action;
 }
 
 function action(section) {
     let act = option(section, "action", "");
     if (act == "") {
-        if (option(section, "awg_config", "") != "")
-            act = "amneziawg";
+        if (option(section, "awg_server_address", "") != "" || option(section, "awg_config", "") != "")
+            act = "awg";
         else if (option(section, "mieru_server", "") != "")
             act = "mieru";
         else if (length(outbound_jsons(section)) > 0 ||
@@ -1099,6 +1107,7 @@ return {
     item_option,
     item_bool,
     is_connections_action,
+    is_remote_proxy_action,
     normalize_action,
     action,
     connection_urls,

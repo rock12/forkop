@@ -128,6 +128,15 @@ function int_option(section, key, fallback) {
     return int(value, 10);
 }
 
+function int_or_range_option(section, key, fallback) {
+    let value = trim(as_string(option(section, key, "")));
+    if (match(value, /^[0-9]+$/))
+        return int(value, 10);
+    if (match(value, /^[0-9]+-[0-9]+$/))
+        return value;
+    return fallback;
+}
+
 function trim(str) {
     return replace(as_string(str), /^[ \t\r\n]+|[ \t\r\n]+$/g, "");
 }
@@ -195,6 +204,7 @@ return {
     list_option,
     bool_option,
     int_option,
+    int_or_range_option,
     trim,
     awg_tag_chain,
     extended_awg_schema_has_junk_signatures

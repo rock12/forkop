@@ -24,6 +24,7 @@ const ROUTING_ACTIONS = [
   "zapret2",
   "byedpi",
   "udpspeeder",
+  "awg",
   "amneziawg",
   "mieru",
 ];
@@ -84,7 +85,7 @@ function isOutboundDetourTargetSection(section, currentSectionId) {
     sectionName &&
     sectionName !== currentSectionId &&
     section.enabled !== "0" &&
-    ["connection", "proxy", "outbound", "vpn", "udpspeeder", "amneziawg", "mieru"].includes(action)
+    ["connection", "proxy", "outbound", "vpn", "udpspeeder", "awg", "amneziawg", "mieru"].includes(action)
   );
 }
 
@@ -124,7 +125,7 @@ function isDnsDetourTargetSection(section, currentSectionId) {
     return false;
   }
 
-  if (["connection", "proxy", "outbound", "vpn", "amneziawg", "mieru"].includes(action)) {
+  if (["connection", "proxy", "outbound", "vpn", "awg", "amneziawg", "mieru"].includes(action)) {
     return true;
   }
   if (action === "zapret") {
@@ -1749,7 +1750,7 @@ function isDownloadThroughTargetSection(section, currentSectionId) {
     return false;
   }
 
-  if (["connection", "proxy", "outbound", "vpn", "amneziawg"].includes(action)) {
+  if (["connection", "proxy", "outbound", "vpn", "awg", "amneziawg", "mieru"].includes(action)) {
     return true;
   }
 
@@ -3914,20 +3915,21 @@ function validateOutboundJsonItemsBeforeSave(_section_id, values) {
   return true;
 }
 
-function cleanAwgHex(val) {
-  if (!val) return "";
-  let s = `${val}`.trim();
-  if (s === "0" || s === "") return "";
+function cleanAwgPayload(v) {
+  if (typeof v !== "string") return "";
+  let s = v.trim();
+  if (!s || s === "0") return s;
   if (/^[0-9a-fA-F]+><[^<>]+>/.test(s)) s = "<b 0x" + s;
-  if (/<[^<>]+$/.test(s)) s = s + ">";
-  if (/^(<[^<>]+>)+$/.test(s)) return s;
-  let hex = s.toLowerCase().replace(/^0x/, "");
-  if (/^[0-9a-f]+$/.test(hex)) {
-    if (hex.length % 2 !== 0) hex += "0";
-    return `<b 0x${hex}>`;
+  if (/<[^<>]+$/.test(s)) s += ">";
+  const plainHex = s.replace(/^0x/i, "");
+  if (/^[0-9a-fA-F]+$/.test(plainHex) && plainHex.length >= 2) {
+    const padded = plainHex.length % 2 !== 0 ? plainHex + "0" : plainHex;
+    return "<b 0x" + padded.toLowerCase() + ">";
   }
   return s;
 }
+
+const cleanAwgHex = cleanAwgPayload;
 
 function parseAwgIni(text) {
   const lines = text.split(/\r?\n/);
@@ -4400,25 +4402,56 @@ function showAmneziaWgImportModal(section_id) {
             outboundObj.amnezia = awgObj;
           }
 
-          const currentJsons = getConfigListValues(section_id, "outbound_jsons");
-          currentJsons.push(JSON.stringify(outboundObj));
-          writeListOption(section_id, "outbound_jsons", currentJsons);
-
-          const outboundOpt = outboundNameSourceOptions.get("outbound_jsons");
-          if (outboundOpt && typeof outboundOpt.getUIElement === "function") {
-            const uiEl = outboundOpt.getUIElement(section_id);
-            if (uiEl && typeof uiEl.setValue === "function") {
-              uiEl.setValue(currentJsons);
+          const setVal = (opt, val) => {
+            if (val === undefined || val === null) return;
+            const str = String(val);
+            const el =
+              document.getElementById(`widget.cbid.${UCI_PACKAGE}.${section_id}.${opt}`) ||
+              document.getElementById(`cbid.${UCI_PACKAGE}.${section_id}.${opt}`);
+            const w =
+              el &&
+              (/^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName)
+                ? el
+                : el.querySelector("input:not([type='hidden']),select,textarea"));
+            if (w) {
+              w.value = str;
+              w.dispatchEvent(new Event("input", { bubbles: true }));
+              w.dispatchEvent(new Event("change", { bubbles: true }));
             }
+            uci.set(UCI_PACKAGE, section_id, opt, str);
+          };
+
+          setVal("action", "awg");
+          setVal("awg_server_address", server);
+          setVal("awg_server_port", String(port));
+          setVal("awg_local_address", addrs.join(" "));
+          setVal("awg_private_key", privKey);
+          setVal("awg_peer_public_key", pubKey);
+          if (pskVal) setVal("awg_preshared_key", pskVal);
+          if (mtuVal && !isNaN(mtuVal)) setVal("awg_mtu", String(mtuVal));
+          setVal("awg_keepalive", "25");
+
+          ["jc", "jmin", "jmax", "s1", "s2", "s3", "s4", "h1", "h2", "h3", "h4"].forEach((k) => {
+            const el = document.getElementById(`fkp-awg-${k}`);
+            const val = el ? el.value : "";
+            if (val !== "") setVal(`awg_${k}`, val);
+          });
+          ["i1", "i2"].forEach((k) => {
+            const el = document.getElementById(`fkp-awg-${k}`);
+            const val = el ? el.value : "";
+            if (val) setVal(`awg_${k}`, cleanAwgPayload(val));
+          });
+          const hpk = (document.getElementById("fkp-awg-hpk")?.value || "").trim();
+          if (hpk) {
+            setVal("awg_header_protection_key", hpk);
+            setVal("awg_version", "3.0");
+          } else {
+            setVal("awg_version", "2.0");
           }
 
-          const rawInputVal = (document.getElementById("fkp-awg-raw-input").value || "").trim();
-          if (rawInputVal) {
-            uci.set(UCI_PACKAGE, section_id, "awg_config", rawInputVal);
-          }
-          if (!uci.get(UCI_PACKAGE, section_id, "action")) {
-            uci.set(UCI_PACKAGE, section_id, "action", "amneziawg");
-          }
+          // Clear conflicting outbound_jsons
+          uci.unset(UCI_PACKAGE, section_id, "outbound_jsons");
+
           if (!uci.get(UCI_PACKAGE, section_id, "enabled")) {
             uci.set(UCI_PACKAGE, section_id, "enabled", "1");
           }
@@ -4427,7 +4460,7 @@ function showAmneziaWgImportModal(section_id) {
           }
 
           ui.hideModal();
-          ui.addNotification(null, E("p", {}, _("AmneziaWG / WireGuard outbound added successfully!")), "info");
+          ui.addNotification(null, E("p", {}, _("AmneziaWG settings imported successfully!")), "info");
         },
       }, _("Save Outbound")),
     ]),
@@ -4639,8 +4672,9 @@ function getActionOptionLabel(action) {
       return "ByeDPI";
     case "udpspeeder":
       return "UDPspeeder";
+    case "awg":
     case "amneziawg":
-      return "AmneziaWG / WireGuard";
+      return "AmneziaWG";
     case "mieru":
       return "Mieru";
     case "outbound":
@@ -4670,7 +4704,7 @@ function getRuleActionDisplayValue(section_id) {
     return "UDPspeeder";
   }
 
-  if (action === "amneziawg") {
+  if (action === "awg" || action === "amneziawg") {
     return "AmneziaWG";
   }
 
@@ -4690,6 +4724,7 @@ function populateActionOptionValues(option) {
   delete option.vallist;
 
   option.value("connection", getActionOptionLabel("connection"));
+  option.value("awg", getActionOptionLabel("awg"));
   option.value("amneziawg", getActionOptionLabel("amneziawg"));
   option.value("mieru", getActionOptionLabel("mieru"));
   option.value("bypass", "Bypass");
@@ -7599,7 +7634,7 @@ function createSectionContent(section) {
   o.cfgvalue = function (section_id) {
     const act = getRuleConfiguredAction(section_id);
     if (act) return act;
-    if (uci.get(UCI_PACKAGE, section_id, "awg_config")) return "amneziawg";
+    if (uci.get(UCI_PACKAGE, section_id, "awg_server_address") || uci.get(UCI_PACKAGE, section_id, "awg_config")) return "awg";
     if (uci.get(UCI_PACKAGE, section_id, "mieru_server")) return "mieru";
     return "connection";
   };
@@ -8078,7 +8113,6 @@ function createSectionContent(section) {
     _("Custom outbound configurations in JSON format"),
   );
   o.depends("action", "connection");
-  o.depends("action", "amneziawg");
   o.rmempty = true;
   o.modalonly = true;
   o.addButtonLabel = _("+ Add JSON outbound");
@@ -8098,57 +8132,607 @@ function createSectionContent(section) {
   o.onListChange = refreshDashboardFilterChoiceWidgets;
   outboundNameSourceOptions.set("outbound_jsons", o);
 
+  // ── AmneziaWG Configuration ───────────────────────────────────────────────
+
+  // Import .conf / vpn:// link modal button
   o = section.taboption(
     "settings",
     form.Button,
     "_add_amnezia_wg",
-    _("AmneziaWG / WireGuard"),
+    _("Import .conf / Link"),
     _("Import AmneziaWG (AWG 1.0 / 2.0 / 3.1) or standard WireGuard configuration (.conf file, vpn:// link, or text)"),
   );
-  o.depends("action", "connection");
+  o.depends("action", "awg");
   o.depends("action", "amneziawg");
   o.modalonly = true;
-  o.inputtitle = _("+ Add AmneziaWG / WireGuard");
+  o.inputtitle = _("+ Import Config / Link");
   o.inputstyle = "action";
   o.onclick = function (_ev, section_id) {
     showAmneziaWgImportModal(section_id);
   };
 
+  // Load .conf file directly
   o = section.taboption(
     "settings",
-    form.TextValue,
-    "awg_config",
-    _("AmneziaWG Configuration (.conf / vpn://)"),
-    _("Paste AmneziaWG / WireGuard configuration (.conf format or vpn:// / awg:// link). If specified, it will be automatically converted to the sing-box endpoint on save."),
+    form.Button,
+    "_load_awg_conf",
+    _("Load .conf file"),
+    _("Import AmneziaWG settings from .conf file directly"),
   );
-  o.depends("action", "amneziawg");
-  o.rows = 8;
-  o.wrap = "off";
-  o.textarea = true;
   o.modalonly = true;
-  o.placeholder = "[Interface]\nPrivateKey = ...\nAddress = 172.16.0.2/32\nJc = 4\nJmin = 40\nJmax = 70\nS1 = 0\nS2 = 0\nH1 = 1\nH2 = 2\nH3 = 3\nH4 = 4\n\n[Peer]\nPublicKey = ...\nEndpoint = 198.51.100.1:51820\nAllowedIPs = 0.0.0.0/0";
-  o.load = function (section_id) {
-    return uci.get(UCI_PACKAGE, section_id, "awg_config") || "";
-  };
-  o.write = function (section_id, value) {
-    const trimmed = `${value || ""}`.trim();
-    if (!trimmed) {
-      uci.unset(UCI_PACKAGE, section_id, "awg_config");
-      return;
-    }
-    uci.set(UCI_PACKAGE, section_id, "awg_config", trimmed);
-    try {
-      return parseAmneziaOrWgInput(trimmed).then((outbound) => {
-        if (outbound) {
-          if (!outbound.tag) {
-            outbound.tag = uci.get(UCI_PACKAGE, section_id, "label") || section_id;
-          }
-          const jsonStr = JSON.stringify(outbound);
-          writeListOption(section_id, "outbound_jsons", [jsonStr]);
+  o.depends("action", "awg");
+  o.depends("action", "amneziawg");
+
+  o.renderWidget = function (section_id) {
+    const parseConf = (text) => {
+      const out = {};
+      let cur = null;
+      for (const raw of text.split(/\r?\n/)) {
+        const line = raw.trim();
+        if (!line || line.startsWith("#") || line.startsWith(";")) continue;
+        const sm = line.match(/^\[([^\]]+)\]$/);
+        if (sm) {
+          cur = sm[1].trim().toLowerCase();
+          out[cur] = out[cur] || {};
+          continue;
         }
-      }).catch((_e) => {});
-    } catch (_err) {}
+        const kv = line.match(/^([^=]+)\s*=\s*(.+)$/);
+        if (kv && cur) {
+          const key = kv[1].trim();
+          let val = kv[2].trim();
+          if (!val.startsWith("<")) {
+            const commentIdx = val.search(/[#;]/);
+            if (commentIdx >= 0) val = val.slice(0, commentIdx).trim();
+          }
+          out[cur][key] = val;
+        }
+      }
+      return out;
+    };
+
+    const normalizeAddr = (str) =>
+      str
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .map((a) =>
+          a.includes("/") ? a : a.includes(":") ? a + "/128" : a + "/32",
+        )
+        .join(" ");
+
+    const setVal = (opt, val) => {
+      if (val === undefined || val === null) return;
+      const str = String(val);
+      const el =
+        document.getElementById(
+          `widget.cbid.${UCI_PACKAGE}.${section_id}.${opt}`,
+        ) ||
+        document.getElementById(`cbid.${UCI_PACKAGE}.${section_id}.${opt}`);
+      const w =
+        el &&
+        (/^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName)
+          ? el
+          : el.querySelector("input:not([type='hidden']),select,textarea"));
+      if (w) {
+        w.value = str;
+        w.dispatchEvent(new Event("input", { bubbles: true }));
+        w.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+      uci.set(UCI_PACKAGE, section_id, opt, str);
+    };
+
+    const fileInput = E("input", {
+      type: "file",
+      accept: ".conf",
+      style: "display:none",
+    });
+
+    const icon = E("span", {}, ["📂"]);
+    const label = E("span", { class: "twg-label" }, [_("Load .conf")]);
+    const btn = E(
+      "button",
+      {
+        class: "btn cbi-button cbi-button-neutral twg-btn",
+        type: "button",
+        style: "display:inline-flex;align-items:center;gap:8px;",
+      },
+      [icon, label],
+    );
+
+    const setBtn = (state, text) => {
+      btn.className =
+        "btn cbi-button cbi-button-neutral twg-btn" +
+        (state ? " twg-" + state : "");
+      label.textContent = text || _("Load .conf");
+    };
+
+    fileInput.addEventListener("change", () => {
+      const file = fileInput.files[0];
+      fileInput.value = "";
+      if (!file) return;
+
+      if (!file.name.endsWith(".conf")) {
+        ui.addNotification(
+          _("Error"),
+          E("p", {}, _("Select a file with .conf extension")),
+          "danger",
+        );
+        return;
+      }
+
+      const reader = new FileReader();
+
+      reader.onload = (ev) => {
+        let cfg;
+        try {
+          cfg = parseConf(ev.target.result);
+        } catch (err) {
+          setBtn("error", _("Error"));
+          setTimeout(() => setBtn("", null), 2500);
+          ui.addNotification(
+            _("Error"),
+            E("p", {}, _("Failed to parse file: ") + err.message),
+            "danger",
+          );
+          return;
+        }
+
+        const iface = cfg.interface || {};
+        const peer = cfg.peer || {};
+
+        const getConfVal = (k) => {
+          const lk = k.toLowerCase();
+          for (const s of [iface, peer]) {
+            if (!s) continue;
+            for (const key in s) {
+              if (key.toLowerCase() === lk) return s[key];
+            }
+          }
+          return undefined;
+        };
+
+        const addr = getConfVal("Address") || getConfVal("awg_local_address");
+        if (addr) setVal("awg_local_address", normalizeAddr(addr));
+
+        const priv = getConfVal("PrivateKey") || getConfVal("awg_private_key");
+        if (priv) setVal("awg_private_key", priv);
+
+        const mtu = getConfVal("MTU");
+        if (mtu !== undefined) setVal("awg_mtu", mtu);
+
+        const keepalive =
+          getConfVal("PersistentKeepalive") || getConfVal("Keepalive");
+        if (keepalive !== undefined) setVal("awg_keepalive", keepalive);
+
+        const jc = getConfVal("Jc");
+        if (jc !== undefined) setVal("awg_jc", jc);
+
+        const jmin = getConfVal("Jmin");
+        if (jmin !== undefined) setVal("awg_jmin", jmin);
+
+        const jmax = getConfVal("Jmax");
+        if (jmax !== undefined) setVal("awg_jmax", jmax);
+
+        const s1 = getConfVal("S1");
+        if (s1 !== undefined) setVal("awg_s1", s1);
+
+        const s2 = getConfVal("S2");
+        if (s2 !== undefined) setVal("awg_s2", s2);
+
+        const s3 = getConfVal("S3");
+        if (s3 !== undefined) setVal("awg_s3", s3);
+
+        const s4 = getConfVal("S4");
+        if (s4 !== undefined) setVal("awg_s4", s4);
+
+        const h1 = getConfVal("H1");
+        if (h1 !== undefined) setVal("awg_h1", h1);
+
+        const h2 = getConfVal("H2");
+        if (h2 !== undefined) setVal("awg_h2", h2);
+
+        const h3 = getConfVal("H3");
+        if (h3 !== undefined) setVal("awg_h3", h3);
+
+        const h4 = getConfVal("H4");
+        if (h4 !== undefined) setVal("awg_h4", h4);
+
+        const i1 = getConfVal("I1");
+        if (i1) setVal("awg_i1", cleanAwgPayload(i1));
+
+        const i2 = getConfVal("I2");
+        if (i2) setVal("awg_i2", cleanAwgPayload(i2));
+
+        const i3 = getConfVal("I3");
+        if (i3) setVal("awg_i3", cleanAwgPayload(i3));
+
+        const i4 = getConfVal("I4");
+        if (i4) setVal("awg_i4", cleanAwgPayload(i4));
+
+        const i5 = getConfVal("I5");
+        if (i5) setVal("awg_i5", cleanAwgPayload(i5));
+
+        const hpk = getConfVal("HeaderProtectionKey") || "";
+        const cpa = getConfVal("ContentPaddingAddition") || "";
+        const rka = getConfVal("RekeyAfterTime") || "";
+        const rkt = getConfVal("RekeyTimeout") || "";
+        const rja = getConfVal("RejectAfterTime") || "";
+        const kpt = getConfVal("KeepaliveTimeout") || "";
+        const mha = getConfVal("MaxHandshakeAttempts") || "";
+        const randomTrailers = getConfVal("RandomTrailers") || "";
+        const disableCookies = getConfVal("DisableCookies") || "";
+
+        const isV31 = !!(
+          rka ||
+          rkt ||
+          rja ||
+          kpt ||
+          mha ||
+          randomTrailers ||
+          disableCookies
+        );
+        const isV30 = !isV31 && !!(hpk || cpa);
+        const detectedVersion = isV31 ? "3.1" : isV30 ? "3.0" : "2.0";
+
+        setVal("awg_version", detectedVersion);
+
+        if (isV31 || isV30) {
+          setVal("awg_header_protection_key", hpk);
+          setVal("awg_content_padding_addition", cpa);
+        } else {
+          setVal("awg_header_protection_key", "");
+          setVal("awg_content_padding_addition", "");
+          uci.unset(UCI_PACKAGE, section_id, "awg_header_protection_key");
+          uci.unset(UCI_PACKAGE, section_id, "awg_content_padding_addition");
+        }
+
+        if (isV31) {
+          setVal("awg_rekey_after_time", rka);
+          setVal("awg_rekey_timeout", rkt);
+          setVal("awg_reject_after_time", rja);
+          setVal("awg_keepalive_timeout", kpt);
+          setVal("awg_max_handshake_attempts", mha);
+          uci.set(
+            UCI_PACKAGE,
+            section_id,
+            "awg_random_trailers",
+            /^(1|true|yes|on)$/i.test(String(randomTrailers).trim())
+              ? "1"
+              : "0",
+          );
+          uci.set(
+            UCI_PACKAGE,
+            section_id,
+            "awg_disable_cookies",
+            /^(1|true|yes|on)$/i.test(String(disableCookies).trim())
+              ? "1"
+              : "0",
+          );
+        } else {
+          setVal("awg_rekey_after_time", "");
+          setVal("awg_rekey_timeout", "");
+          setVal("awg_reject_after_time", "");
+          setVal("awg_keepalive_timeout", "");
+          setVal("awg_max_handshake_attempts", "");
+          uci.unset(UCI_PACKAGE, section_id, "awg_rekey_after_time");
+          uci.unset(UCI_PACKAGE, section_id, "awg_rekey_timeout");
+          uci.unset(UCI_PACKAGE, section_id, "awg_reject_after_time");
+          uci.unset(UCI_PACKAGE, section_id, "awg_keepalive_timeout");
+          uci.unset(UCI_PACKAGE, section_id, "awg_max_handshake_attempts");
+          uci.unset(UCI_PACKAGE, section_id, "awg_random_trailers");
+          uci.unset(UCI_PACKAGE, section_id, "awg_disable_cookies");
+        }
+
+        const pub =
+          getConfVal("PublicKey") || getConfVal("awg_peer_public_key");
+        if (pub) setVal("awg_peer_public_key", pub);
+
+        const psk =
+          getConfVal("PresharedKey") || getConfVal("awg_preshared_key");
+        if (psk) setVal("awg_preshared_key", psk);
+
+        const ep = getConfVal("Endpoint");
+        if (ep) {
+          const i = ep.lastIndexOf(":");
+          if (i > 0) {
+            setVal("awg_server_address", ep.slice(0, i));
+            setVal("awg_server_port", ep.slice(i + 1));
+          }
+        }
+
+        setVal("action", "awg");
+        uci.unset(UCI_PACKAGE, section_id, "outbound_jsons");
+
+        setBtn("success", _("Loaded!"));
+        setTimeout(() => setBtn("", null), 2000);
+        ui.addNotification(
+          _("Done"),
+          E("p", {}, _("AmneziaWG config loaded successfully!")),
+          "success",
+        );
+      };
+
+      reader.onerror = () => {
+        setBtn("error", _("Read error"));
+        setTimeout(() => setBtn("", null), 2500);
+      };
+
+      reader.readAsText(file);
+    });
+
+    btn.addEventListener("click", () => fileInput.click());
+
+    return E("div", { style: "display:contents" }, [fileInput, btn]);
   };
+
+  o = section.taboption(
+    "settings",
+    form.Value,
+    "awg_local_address",
+    _("Local Address"),
+  );
+  o.modalonly = true;
+  o.rmempty = false;
+  o.depends("action", "awg");
+  o.depends("action", "amneziawg");
+  o.validate = validateRequiredText;
+
+  o = section.taboption(
+    "settings",
+    form.Value,
+    "awg_private_key",
+    _("Private Key"),
+  );
+  o.modalonly = true;
+  o.rmempty = false;
+  o.depends("action", "awg");
+  o.depends("action", "amneziawg");
+  o.validate = validateRequiredText;
+
+  o = section.taboption(
+    "settings",
+    form.Value,
+    "awg_peer_public_key",
+    _("Peer Public Key"),
+  );
+  o.modalonly = true;
+  o.rmempty = false;
+  o.depends("action", "awg");
+  o.depends("action", "amneziawg");
+  o.validate = validateRequiredText;
+
+  o = section.taboption(
+    "settings",
+    form.Value,
+    "awg_server_address",
+    _("Server Address"),
+  );
+  o.modalonly = true;
+  o.rmempty = false;
+  o.depends("action", "awg");
+  o.depends("action", "amneziawg");
+  o.validate = validateRequiredText;
+
+  o = section.taboption(
+    "settings",
+    form.Value,
+    "awg_server_port",
+    _("Server Port"),
+  );
+  o.modalonly = true;
+  o.rmempty = false;
+  o.datatype = "port";
+  o.depends("action", "awg");
+  o.depends("action", "amneziawg");
+  o.validate = validateRequiredText;
+
+  o = section.taboption(
+    "settings",
+    form.Value,
+    "awg_preshared_key",
+    _("Preshared Key"),
+  );
+  o.modalonly = true;
+  o.rmempty = true;
+  o.depends("action", "awg");
+  o.depends("action", "amneziawg");
+
+  o = section.taboption("settings", form.Value, "awg_mtu", _("MTU"));
+  o.datatype = "uinteger";
+  o.placeholder = "1280";
+  o.modalonly = true;
+  o.rmempty = true;
+  o.depends("action", "awg");
+  o.depends("action", "amneziawg");
+
+  o = section.taboption(
+    "settings",
+    form.Value,
+    "awg_keepalive",
+    _("Persistent Keepalive"),
+  );
+  o.placeholder = "25-35";
+  o.validate = function (_section_id, value) {
+    if (!value) return true;
+    if (/^\d+$/.test(value)) return true;
+    const m = value.match(/^(\d+)-(\d+)$/);
+    if (m && Number(m[1]) <= Number(m[2])) return true;
+    return _("Enter a number or range, e.g. 25 or 25-35");
+  };
+  o.modalonly = true;
+  o.rmempty = true;
+  o.depends("action", "awg");
+  o.depends("action", "amneziawg");
+
+  o = section.taboption(
+    "settings",
+    form.ListValue,
+    "awg_version",
+    _("AmneziaWG Version"),
+    _(
+      "Protocol version: 2.0 (standard headers, WARP compatible), 3.0 (header protection key, padding ranges), or 3.1 (header protection key, padding ranges, advanced timers)",
+    ),
+  );
+  o.modalonly = true;
+  o.rmempty = false;
+  o.default = "2.0";
+  o.value("2.0", "AmneziaWG 2.0");
+  o.value("3.0", "AmneziaWG 3.0");
+  o.value("3.1", "AmneziaWG 3.1");
+  o.depends("action", "awg");
+  o.depends("action", "amneziawg");
+  o.write = function (section_id, formvalue) {
+    if (formvalue === "2.0") {
+      uci.unset(UCI_PACKAGE, section_id, "awg_header_protection_key");
+      uci.unset(UCI_PACKAGE, section_id, "awg_content_padding_addition");
+      uci.unset(UCI_PACKAGE, section_id, "awg_rekey_after_time");
+      uci.unset(UCI_PACKAGE, section_id, "awg_rekey_timeout");
+      uci.unset(UCI_PACKAGE, section_id, "awg_reject_after_time");
+      uci.unset(UCI_PACKAGE, section_id, "awg_keepalive_timeout");
+      uci.unset(UCI_PACKAGE, section_id, "awg_max_handshake_attempts");
+      uci.unset(UCI_PACKAGE, section_id, "awg_random_trailers");
+      uci.unset(UCI_PACKAGE, section_id, "awg_disable_cookies");
+    } else if (formvalue === "3.0") {
+      uci.unset(UCI_PACKAGE, section_id, "awg_rekey_after_time");
+      uci.unset(UCI_PACKAGE, section_id, "awg_rekey_timeout");
+      uci.unset(UCI_PACKAGE, section_id, "awg_reject_after_time");
+      uci.unset(UCI_PACKAGE, section_id, "awg_keepalive_timeout");
+      uci.unset(UCI_PACKAGE, section_id, "awg_max_handshake_attempts");
+      uci.unset(UCI_PACKAGE, section_id, "awg_random_trailers");
+      uci.unset(UCI_PACKAGE, section_id, "awg_disable_cookies");
+    }
+    return uci.set(UCI_PACKAGE, section_id, "awg_version", formvalue);
+  };
+
+  // ── AmneziaWG obfuscation parameters ──────────────
+  const addAwgParam = (name, title, desc, def) => {
+    let opt = section.taboption("settings", form.Value, name, title, desc);
+    opt.modalonly = true;
+    opt.rmempty = false;
+    opt.default = def;
+    opt.depends("action", "awg");
+    opt.depends("action", "amneziawg");
+    return opt;
+  };
+
+  addAwgParam("awg_jc", _("Junk Packet Count (Jc)"), "", "120");
+  addAwgParam("awg_jmin", _("Junk Min Size (Jmin)"), "", "23");
+  addAwgParam("awg_jmax", _("Junk Max Size (Jmax)"), "", "911");
+  addAwgParam("awg_s1", _("Init Packet Magic Header (S1)"), "", "0");
+  addAwgParam("awg_s2", _("Response Packet Magic Header (S2)"), "", "0");
+  addAwgParam("awg_s3", _("Init Packet Magic Header (S3)"), "", "0");
+  addAwgParam("awg_s4", _("Response Packet Magic Header (S4)"), "", "0");
+  addAwgParam("awg_h1", _("Underload Packet Magic Header (H1)"), "", "1");
+  addAwgParam("awg_h2", _("Underload Packet Magic Header (H2)"), "", "2");
+  addAwgParam("awg_h3", _("Underload Packet Magic Header (H3)"), "", "3");
+  addAwgParam("awg_h4", _("Underload Packet Magic Header (H4)"), "", "4");
+
+  const addAwgPayloadParam = (name, title, desc, def) => {
+    let opt = section.taboption("settings", form.Value, name, title, desc);
+    opt.modalonly = true;
+    opt.rmempty = false;
+    opt.default = def;
+    opt.depends("action", "awg");
+    opt.depends("action", "amneziawg");
+    opt.cfgvalue = function (section_id) {
+      let val = uci.get(UCI_PACKAGE, section_id, name);
+      if (val === undefined || val === null || val === "") return def;
+      return cleanAwgPayload(String(val));
+    };
+    opt.write = function (section_id, formvalue) {
+      return uci.set(UCI_PACKAGE, section_id, name, cleanAwgPayload(formvalue));
+    };
+    return opt;
+  };
+
+  addAwgPayloadParam("awg_i1", _("Init Packet Payload (I1)"), "", "0");
+  addAwgPayloadParam("awg_i2", _("Init Packet Payload (I2)"), "", "0");
+  addAwgPayloadParam("awg_i3", _("Init Packet Payload (I3)"), "", "0");
+  addAwgPayloadParam("awg_i4", _("Init Packet Payload (I4)"), "", "0");
+  addAwgPayloadParam("awg_i5", _("Init Packet Payload (I5)"), "", "0");
+
+  // ── AmneziaWG 3.0 & 3.1 Advanced Parameters ───────────────────────────────
+  const addAwgV3Param = (name, title, desc) => {
+    let opt = section.taboption("settings", form.Value, name, title, desc);
+    opt.modalonly = true;
+    opt.rmempty = true;
+    opt.depends({ action: "awg", awg_version: "3.0" });
+    opt.depends({ action: "amneziawg", awg_version: "3.0" });
+    opt.depends({ action: "awg", awg_version: "3.1" });
+    opt.depends({ action: "amneziawg", awg_version: "3.1" });
+    return opt;
+  };
+
+  const addAwgV31Param = (name, title, desc) => {
+    let opt = section.taboption("settings", form.Value, name, title, desc);
+    opt.modalonly = true;
+    opt.rmempty = true;
+    opt.depends({ action: "awg", awg_version: "3.1" });
+    opt.depends({ action: "amneziawg", awg_version: "3.1" });
+    return opt;
+  };
+
+  addAwgV3Param(
+    "awg_header_protection_key",
+    _("Header Protection Key"),
+    _("AmneziaWG 3.0 / 3.1 header protection key"),
+  );
+  addAwgV3Param(
+    "awg_content_padding_addition",
+    _("Content Padding Addition"),
+    _("AmneziaWG 3.0 / 3.1 content padding range, e.g. 38-104"),
+  );
+  addAwgV31Param(
+    "awg_rekey_after_time",
+    _("Rekey After Time"),
+    _("AmneziaWG 3.1 rekey after time"),
+  );
+  addAwgV31Param(
+    "awg_rekey_timeout",
+    _("Rekey Timeout"),
+    _("AmneziaWG 3.1 rekey timeout"),
+  );
+  addAwgV31Param(
+    "awg_reject_after_time",
+    _("Reject After Time"),
+    _("AmneziaWG 3.1 reject after time"),
+  );
+  addAwgV31Param(
+    "awg_keepalive_timeout",
+    _("Keepalive Timeout"),
+    _("AmneziaWG 3.1 keepalive timeout"),
+  );
+  addAwgV31Param(
+    "awg_max_handshake_attempts",
+    _("Max Handshake Attempts"),
+    _("AmneziaWG 3.1 max handshake attempts"),
+  );
+
+  o = section.taboption(
+    "settings",
+    form.Flag,
+    "awg_random_trailers",
+    _("Random Trailers"),
+    _("AmneziaWG 3.1 random packet trailers"),
+  );
+  o.modalonly = true;
+  o.rmempty = false;
+  o.default = "0";
+  o.depends({ action: "awg", awg_version: "3.1" });
+  o.depends({ action: "amneziawg", awg_version: "3.1" });
+
+  o = section.taboption(
+    "settings",
+    form.Flag,
+    "awg_disable_cookies",
+    _("Disable Cookies"),
+    _("AmneziaWG 3.1 disable cookie replies"),
+  );
+  o.modalonly = true;
+  o.rmempty = false;
+  o.default = "0";
+  o.depends({ action: "awg", awg_version: "3.1" });
+  o.depends({ action: "amneziawg", awg_version: "3.1" });
 
   // ── Mieru (sing-box-extended) ─────────────────────────────────────────────
   o = section.taboption(
@@ -8321,6 +8905,7 @@ function createSectionContent(section) {
   o.default = "0";
   o.rmempty = false;
   o.depends("action", "connection");
+  o.depends("action", "awg");
   o.depends("action", "amneziawg");
   o.depends("action", "mieru");
   o.modalonly = true;
@@ -8358,6 +8943,7 @@ function createSectionContent(section) {
   );
   o.rmempty = false;
   o.depends({ action: "connection", outbound_detour_enabled: "1" });
+  o.depends({ action: "awg", outbound_detour_enabled: "1" });
   o.depends({ action: "amneziawg", outbound_detour_enabled: "1" });
   o.depends({ action: "mieru", outbound_detour_enabled: "1" });
   o.modalonly = true;

@@ -413,12 +413,12 @@ function bool_flag(value) {
 
 function outbound_detour_source_action(action) {
     action = as_string(action);
-    return connections.is_connections_action(action);
+    return connections.is_connections_action(action) || action == "awg" || action == "amneziawg" || action == "mieru";
 }
 
 function outbound_detour_target_action(action) {
     action = as_string(action);
-    return connections.is_connections_action(action);
+    return connections.is_connections_action(action) || action == "awg" || action == "amneziawg" || action == "mieru";
 }
 
 function outbound_detour_rows() {
@@ -555,6 +555,8 @@ function basic_rule_rows() {
 function download_section_action_available(action, byedpi_installed, zapret_installed, zapret2_installed) {
     action = as_string(action);
     if (connections.is_connections_action(action))
+        return true;
+    if (action == "awg" || action == "amneziawg" || action == "mieru")
         return true;
     if (action == "byedpi")
         return bool_flag(byedpi_installed);
@@ -808,8 +810,8 @@ function rule_action(section) {
     let act = option(section, "action", "");
     if (act != "")
         return act;
-    if (option(section, "awg_config", "") != "")
-        return "amneziawg";
+    if (option(section, "awg_server_address", "") != "" || option(section, "awg_config", "") != "")
+        return "awg";
     if (option(section, "mieru_server", "") != "")
         return "mieru";
     if (length(connections.outbound_jsons(section)) > 0 ||
@@ -821,11 +823,11 @@ function rule_action(section) {
 }
 
 function rule_action_supported(action) {
-    return contains([ "connection", "proxy", "outbound", "vpn", "bypass", "block", "dns", "zapret", "zapret2", "byedpi", "udpspeeder", "amneziawg", "mieru" ], as_string(action));
+    return contains([ "connection", "proxy", "outbound", "vpn", "bypass", "block", "dns", "zapret", "zapret2", "byedpi", "udpspeeder", "awg", "amneziawg", "mieru" ], as_string(action));
 }
 
 function server_routing_section_action_supported(action) {
-    return contains([ "connection", "proxy", "outbound", "vpn", "zapret", "zapret2", "byedpi", "udpspeeder", "amneziawg", "mieru" ], as_string(action));
+    return contains([ "connection", "proxy", "outbound", "vpn", "zapret", "zapret2", "byedpi", "udpspeeder", "awg", "amneziawg", "mieru" ], as_string(action));
 }
 
 function duration_to_seconds_value(value) {
