@@ -2344,3 +2344,27 @@ msgstr "Имя пользователя Mieru"
 
 msgid "Mieru Password"
 msgstr "Пароль Mieru"
+
+msgid "Генератор WARP"
+msgstr "Генератор WARP"
+
+msgid "Сгенерировать WARP"
+msgstr "Сгенерировать WARP"
+
+msgid "Автоматически сгенерировать конфигурацию Cloudflare WARP для AmneziaWG"
+msgstr "Автоматически сгенерировать конфигурацию Cloudflare WARP для AmneziaWG"
+
+msgid "AmneziaWG (Cloudflare WARP) configuration generated and loaded successfully!"
+msgstr "Конфигурация AmneziaWG (Cloudflare WARP) успешно сгенерирована и загружена!"
+
+msgid "Failed to generate WARP config: "
+msgstr "Не удалось сгенерировать конфигурацию WARP: "
+
+msgid "Failed to parse WARP config: "
+msgstr "Не удалось разобрать конфигурацию WARP: "
+
+msgid "Generated!"
+msgstr "Сгенерировано!"
+
+msgid "Generating…"
+msgstr "Генерация…"

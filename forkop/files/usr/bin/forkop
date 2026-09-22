@@ -109,6 +109,7 @@ function show_help() {
     print("    latency_test_async      Start a dashboard latency test in the background\n");
     print("    latency_test_status     Get background latency test status\n");
     print("    ui_action_ack           Acknowledge a finished UI action state\n");
+    print("    generate_warp           Generate Cloudflare WARP AmneziaWG configuration in JSON format\n");
     print("    generate_reality_keypair\n");
     print("                            Generate a sing-box Reality key pair in JSON format\n");
     print("    get_tls_certificate_sha256 [server]\n");
@@ -183,6 +184,7 @@ function command_spec(command) {
         latency_test_async: [ "service/ui.uc", "latency-test-async", 4 ],
         latency_test_status: [ "service/ui.uc", "latency-test-status", 1 ],
         ui_action_ack: [ "service/ui.uc", "action-ack", 2 ],
+        generate_warp: [ "service/warp_generator.uc", "generate-warp", 0 ],
         generate_reality_keypair: [ "server/service.uc", "generate-reality-keypair", 0 ],
         get_tls_certificate_sha256: [ "server/service.uc", "tls-certificate-sha256", 1 ],
         component_action: [ "components/action.uc", "component-action", 2 ],
