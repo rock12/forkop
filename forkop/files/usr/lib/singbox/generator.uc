@@ -2737,6 +2737,13 @@ function add_awg_endpoint(config, section) {
     push(config.endpoints, endpoint);
 }
 
+function add_udpspeeder_outbound(config, section, sections) {
+    push(config.outbounds, {
+        type: "direct",
+        tag: outbound_tag(section[".name"])
+    });
+}
+
 function add_mieru_outbound(config, section) {
     let outbound = {
         type: "mieru",
