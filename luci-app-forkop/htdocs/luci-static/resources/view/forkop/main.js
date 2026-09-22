@@ -3990,6 +3990,9 @@ async function getDashboardSections(options = {}) {
         let outName = section.interface || section.label || outbound?.value?.name || displayName;
         if (sectionAction === "mieru") outName = "Mieru";
         else if (sectionAction === "udpspeeder") outName = "UDPspeeder";
+        let outType = outbound?.value?.type || fallbackType;
+        if (sectionAction === "udpspeeder") outType = "UDPspeeder";
+        else if (sectionAction === "mieru") outType = "Mieru";
         return {
           withTagSelect: false,
           code: outbound?.code || sectionName,
@@ -4002,7 +4005,7 @@ async function getDashboardSections(options = {}) {
               code: outbound?.code || sectionName,
               displayName: outName,
               latency: outbound?.value?.history?.[0]?.delay || 0,
-              type: outbound?.value?.type || fallbackType,
+              type: outType,
               selected: true,
               canCopyLink: false,
               runtimeAvailable: Boolean(outbound)
