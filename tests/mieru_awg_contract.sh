@@ -34,7 +34,7 @@ function awg_tag_chain(value) {
 }
 
 assert.strictEqual(awg_tag_chain("12345"), "<b 0x123450>", "odd-length hex padded");
-assert.strictEqual(awg_tag_chain("c70011"), "<b 0xc700110>", "odd-length hex padded");
+assert.strictEqual(awg_tag_chain("c7001"), "<b 0xc70010>", "odd-length hex padded");
 assert.strictEqual(awg_tag_chain("c700"), "<b 0xc700>", "even hex");
 assert.strictEqual(awg_tag_chain("<b 0xc700>"), "<b 0xc700>", "preserves <b 0x...>");
 assert.strictEqual(

@@ -321,7 +321,8 @@ function download_detour_tag(settings, purpose) {
     if (section_name == "")
         return "";
     let cursor = uci_cursor();
-    if (cursor.get(CONFIG_NAME, section_name, "action") == "mieru")
+    let sec = cursor.get_all(CONFIG_NAME, section_name);
+    if (option(sec, "action", "") == "mieru")
         return "";
     return outbound_tag(section_name);
 }

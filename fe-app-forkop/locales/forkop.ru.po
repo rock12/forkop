@@ -2275,3 +2275,96 @@ msgstr "sing-box outbound для Zapret2 настроен"
 
 msgid "Zapret2 sing-box outbound is not configured"
 msgstr "sing-box outbound для Zapret2 не настроен"
+
+msgid "AmneziaWG config loaded successfully!"
+msgstr "Конфигурация AmneziaWG успешно загружена!"
+
+msgid "AmneziaWG settings imported successfully!"
+msgstr "Настройки AmneziaWG успешно импортированы!"
+
+msgid "Load .conf file"
+msgstr "Загрузка .conf"
+
+msgid "Загрузка .conf"
+msgstr "Загрузка .conf"
+
+msgid "Import AmneziaWG settings from .conf file directly"
+msgstr "Импортировать настройки AmneziaWG напрямую из файла .conf"
+
+msgid "AmneziaWG Version"
+msgstr "Версия AmneziaWG"
+
+msgid "AmneziaWG 2.0"
+msgstr "AmneziaWG 2.0"
+
+msgid "AmneziaWG 3.0"
+msgstr "AmneziaWG 3.0"
+
+msgid "AmneziaWG 3.1"
+msgstr "AmneziaWG 3.1"
+
+msgid "Header Protection Key"
+msgstr "Ключ защиты заголовков"
+
+msgid "Content Padding Addition"
+msgstr "Дополнительный паддинг контента"
+
+msgid "Rekey After Time"
+msgstr "Время пересогласования ключей"
+
+msgid "Rekey Timeout"
+msgstr "Таймаут пересогласования"
+
+msgid "Reject After Time"
+msgstr "Время отклонения"
+
+msgid "Keepalive Timeout"
+msgstr "Таймаут keepalive"
+
+msgid "Max Handshake Attempts"
+msgstr "Макс. попыток рукопожатия"
+
+msgid "Random Trailers"
+msgstr "Случайные трейлеры пакетов"
+
+msgid "Disable Cookies"
+msgstr "Отключить cookie"
+
+msgid "Mieru Server"
+msgstr "Сервер Mieru"
+
+msgid "Mieru Port / Port Range"
+msgstr "Порт / Диапазон портов Mieru"
+
+msgid "Mieru Transport"
+msgstr "Транспорт Mieru"
+
+msgid "Mieru Username"
+msgstr "Имя пользователя Mieru"
+
+msgid "Mieru Password"
+msgstr "Пароль Mieru"
+
+msgid "Генератор WARP"
+msgstr "Генератор WARP"
+
+msgid "Сгенерировать WARP"
+msgstr "Сгенерировать WARP"
+
+msgid "Автоматически сгенерировать конфигурацию Cloudflare WARP для AmneziaWG"
+msgstr "Автоматически сгенерировать конфигурацию Cloudflare WARP для AmneziaWG"
+
+msgid "AmneziaWG (Cloudflare WARP) configuration generated and loaded successfully!"
+msgstr "Конфигурация AmneziaWG (Cloudflare WARP) успешно сгенерирована и загружена!"
+
+msgid "Failed to generate WARP config: "
+msgstr "Не удалось сгенерировать конфигурацию WARP: "
+
+msgid "Failed to parse WARP config: "
+msgstr "Не удалось разобрать конфигурацию WARP: "
+
+msgid "Generated!"
+msgstr "Сгенерировано!"
+
+msgid "Generating…"
+msgstr "Генерация…"
