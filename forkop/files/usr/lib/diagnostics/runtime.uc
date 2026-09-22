@@ -1071,6 +1071,8 @@ function build_system_info() {
     let zapret2_version = zapret2_installed ? provider_version(ZAPRET2_RUNTIME_UC) : "not installed";
     let byedpi_installed = provider_installed(BYEDPI_RUNTIME_UC) ? 1 : 0;
     let byedpi_version = byedpi_installed ? provider_version(BYEDPI_RUNTIME_UC) : "not installed";
+    let udpspeeder_installed = provider_installed(UDPSPEEDER_RUNTIME_UC) ? 1 : 0;
+    let udpspeeder_version = udpspeeder_installed ? provider_version(UDPSPEEDER_RUNTIME_UC) : "not installed";
     let device_model = first_line_value("/tmp/sysinfo/model", "unknown");
 
     return {
@@ -1088,6 +1090,8 @@ function build_system_info() {
         zapret2_installed,
         byedpi_version,
         byedpi_installed,
+        udpspeeder_version,
+        udpspeeder_installed,
         openwrt_version: openwrt_release(),
         device_model,
         generated_at: int(clock()[0])

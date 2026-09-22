@@ -139,7 +139,12 @@ export async function runSectionsCheck() {
         };
       }
 
-      if (section.action === 'vpn' && selectedOutbound?.runtimeAvailable) {
+      if (
+        ['vpn', 'awg', 'amneziawg', 'mieru', 'udpspeeder'].includes(
+          section.action,
+        ) &&
+        selectedOutbound?.runtimeAvailable
+      ) {
         return {
           state: 'warning',
           latency: `[${selectedOutbound.displayName || section.code}] ${_('Connectivity probe failed')}`,

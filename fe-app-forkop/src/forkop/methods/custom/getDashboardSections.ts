@@ -365,7 +365,17 @@ function getJsonOutbounds(section: Forkop.ConfigSection) {
 
 function isConnectionAction(action?: string) {
   return Boolean(
-    action && ['connection', 'proxy', 'outbound', 'vpn'].includes(action),
+    action &&
+      [
+        'connection',
+        'proxy',
+        'outbound',
+        'vpn',
+        'awg',
+        'amneziawg',
+        'mieru',
+        'udpspeeder',
+      ].includes(action),
   );
 }
 
@@ -1431,9 +1441,23 @@ export async function getDashboardSections(
           };
         }
 
-        if (sectionAction === 'vpn') {
+        if (
+          sectionAction === 'vpn' ||
+          sectionAction === 'awg' ||
+          sectionAction === 'amneziawg' ||
+          sectionAction === 'mieru' ||
+          sectionAction === 'udpspeeder'
+        ) {
           const outboundTag = getOutboundTagBySection(sectionName);
           const outbound = proxies.find((proxy) => proxy.code === outboundTag);
+          let fallbackType = 'WireGuard';
+          if (sectionAction === 'mieru') fallbackType = 'Mieru';
+          else if (sectionAction === 'awg' || sectionAction === 'amneziawg') fallbackType = 'AmneziaWG';
+          else if (sectionAction === 'udpspeeder') fallbackType = 'UDPspeeder';
+          let outName =
+            section.interface || section.label || outbound?.value?.name || displayName;
+          if (sectionAction === 'mieru') outName = 'Mieru';
+          else if (sectionAction === 'udpspeeder') outName = 'UDPspeeder';
 
           return {
             withTagSelect: false,
@@ -1445,9 +1469,9 @@ export async function getDashboardSections(
             outbounds: [
               {
                 code: outbound?.code || sectionName,
-                displayName: section.interface || outbound?.value?.name || '',
+                displayName: outName,
                 latency: outbound?.value?.history?.[0]?.delay || 0,
-                type: outbound?.value?.type || '',
+                type: outbound?.value?.type || fallbackType,
                 selected: true,
                 canCopyLink: false,
                 runtimeAvailable: Boolean(outbound),
