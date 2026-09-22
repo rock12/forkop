@@ -8556,8 +8556,13 @@ function createSectionContent(section) {
             uci.set(UCI_PACKAGE, section_id, opt, val);
           };
 
+          const cleanAddr = `${data.local_address || ""}`
+            .split(/[,\s]+/)
+            .map((s) => s.trim())
+            .filter(Boolean)
+            .join(" ");
           setWidgetValue("action", "awg");
-          setWidgetValue("awg_local_address", data.local_address);
+          setWidgetValue("awg_local_address", cleanAddr);
           setWidgetValue("awg_private_key", data.private_key);
           setWidgetValue("awg_peer_public_key", data.peer_public_key);
           setWidgetValue("awg_server_address", data.server_address);

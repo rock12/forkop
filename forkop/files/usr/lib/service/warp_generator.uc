@@ -86,7 +86,7 @@ function generate_warp() {
         let ipv6 = parsed.client_ipv6;
         if (!match(ipv6, /\/\d+$/))
             ipv6 += "/128";
-        local_address += ", " + ipv6;
+        local_address += " " + ipv6;
     }
 
     let result = {

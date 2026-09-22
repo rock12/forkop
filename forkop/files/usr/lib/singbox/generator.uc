@@ -2511,8 +2511,19 @@ function add_awg_endpoint(config, section) {
     let tag = outbound_tag(section[".name"]);
 
     let server_address = option(section, "awg_server_address", "");
-    let server_port = int_option(section, "awg_server_port", "0");
-    let local_addrs = list_option(section, "awg_local_address");
+    let raw_addrs = list_option(section, "awg_local_address");
+    let local_addrs = [];
+    for (let item in raw_addrs) {
+        let parts = split(as_string(item), /[,\s]+/);
+        for (let p in parts) {
+            p = trim(p);
+            if (p != "") {
+                if (!match(p, /\/\d+$/))
+                    p += (index(p, ":") >= 0) ? "/128" : "/32";
+                push(local_addrs, p);
+            }
+        }
+    }
     let private_key = option(section, "awg_private_key", "");
     let peer_public_key = option(section, "awg_peer_public_key", "");
     let preshared_key = option(section, "awg_preshared_key", "");
