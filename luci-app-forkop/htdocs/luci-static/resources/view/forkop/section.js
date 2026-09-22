@@ -8578,6 +8578,7 @@ function createSectionContent(section) {
           setWidgetValue("awg_h2", `${data.awg_h2}`);
           setWidgetValue("awg_h3", `${data.awg_h3}`);
           setWidgetValue("awg_h4", `${data.awg_h4}`);
+          setWidgetValue("awg_i1", data.awg_i1 || "");
           setWidgetValue("awg_mtu", `${data.awg_mtu}`);
           setWidgetValue("awg_keepalive", `${data.awg_keepalive}`);
           setWidgetValue("awg_version", data.awg_version || "2.0");

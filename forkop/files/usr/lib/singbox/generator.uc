@@ -2511,6 +2511,7 @@ function add_awg_endpoint(config, section) {
     let tag = outbound_tag(section[".name"]);
 
     let server_address = option(section, "awg_server_address", "");
+    let server_port = int_option(section, "awg_server_port", "0");
     let raw_addrs = list_option(section, "awg_local_address");
     let local_addrs = [];
     for (let item in raw_addrs) {
