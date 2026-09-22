@@ -8104,29 +8104,12 @@ function createSectionContent(section) {
 
   // ── AmneziaWG Configuration ───────────────────────────────────────────────
 
-  // Import .conf / vpn:// link modal button
-  o = section.taboption(
-    "settings",
-    form.Button,
-    "_add_amnezia_wg",
-    _("Import .conf / Link"),
-    _("Import AmneziaWG (AWG 1.0 / 2.0 / 3.1) or standard WireGuard configuration (.conf file, vpn:// link, or text)"),
-  );
-  o.depends("action", "awg");
-  o.depends("action", "amneziawg");
-  o.modalonly = true;
-  o.inputtitle = _("+ Import Config / Link");
-  o.inputstyle = "action";
-  o.onclick = function (_ev, section_id) {
-    showAmneziaWgImportModal(section_id);
-  };
-
   // Load .conf file directly
   o = section.taboption(
     "settings",
     form.Button,
     "_load_awg_conf",
-    _("Load .conf file"),
+    _("Загрузка .conf"),
     _("Import AmneziaWG settings from .conf file directly"),
   );
   o.modalonly = true;
@@ -8198,7 +8181,7 @@ function createSectionContent(section) {
     });
 
     const icon = E("span", {}, ["📂"]);
-    const label = E("span", { class: "twg-label" }, [_("Load .conf")]);
+    const label = E("span", { class: "twg-label" }, [_("Загрузка .conf")]);
     const btn = E(
       "button",
       {
@@ -8213,7 +8196,7 @@ function createSectionContent(section) {
       btn.className =
         "btn cbi-button cbi-button-neutral twg-btn" +
         (state ? " twg-" + state : "");
-      label.textContent = text || _("Load .conf");
+      label.textContent = text || _("Загрузка .conf");
     };
 
     fileInput.addEventListener("change", () => {

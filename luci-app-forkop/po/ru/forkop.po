@@ -2283,13 +2283,13 @@ msgid "AmneziaWG settings imported successfully!"
 msgstr "Настройки AmneziaWG успешно импортированы!"
 
 msgid "Load .conf file"
-msgstr "Загрузить файл .conf"
+msgstr "Загрузка .conf"
+
+msgid "Загрузка .conf"
+msgstr "Загрузка .conf"
 
 msgid "Import AmneziaWG settings from .conf file directly"
 msgstr "Импортировать настройки AmneziaWG напрямую из файла .conf"
-
-msgid "Import .conf / Link"
-msgstr "Импорт .conf / ссылки"
 
 msgid "AmneziaWG Version"
 msgstr "Версия AmneziaWG"
