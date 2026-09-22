@@ -1,10 +1,10 @@
-# Forkop
+# FlowGate
 
 [![Releases](https://img.shields.io/github/v/release/rock12/forkop?label=Release&color=blue)](https://github.com/rock12/forkop/releases)
 [![OpenWrt](https://img.shields.io/badge/OpenWrt-24.10%20%7C%2025.x-blue?logo=openwrt&logoColor=white)](https://openwrt.org/)
 [![License](https://img.shields.io/badge/License-GPL--2.0-green.svg)](LICENSE)
 
-**Forkop** — универсальный комбайн маршрутизации и обхода сетевых блокировок для роутеров под управлением **OpenWrt** (24.10, 25.x и новее). Построен на базе ядра **sing-box**, модульной архитектуры **ucode** и современного реактивного веб-интерфейса **LuCI**.
+**FlowGate** *(бывший Forkop)* — универсальный комбайн маршрутизации и обхода сетевых блокировок для роутеров под управлением **OpenWrt** (24.10, 25.x и новее). Построен на базе ядра **sing-box**, модульной архитектуры **ucode** и современного реактивного веб-интерфейса **LuCI**.
 
 ---
 

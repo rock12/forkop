@@ -1,6 +1,6 @@
 {
   "admin/services/forkop": {
-    "title": "Forkop",
+    "title": "FlowGate",
     "order": 42,
     "action": {
       "type": "view",
