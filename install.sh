@@ -1,8 +1,8 @@
 #!/bin/sh
 # shellcheck shell=dash
 
-REPO_OWNER="ushan0v"
-REPO_NAME="forkop"
+REPO_OWNER="${FORKOP_REPO_OWNER:-rock12}"
+REPO_NAME="${FORKOP_REPO_NAME:-forkop}"
 
 REQUIRED_SPACE_KB=15360
 CONNECT_TIMEOUT_SECONDS=15
@@ -1533,6 +1533,20 @@ ensure_bootstrap_ucode_runtime() {
     ensure_bootstrap_tool "ucode" "ucode"
     ensure_bootstrap_package "ucode-mod-fs"
     ensure_bootstrap_package "ucode-mod-uci"
+
+    msg "Ensuring all required system dependencies and kernel modules are installed..."
+    for dep in ca-bundle curl bind-dig coreutils-base64 ip-full nftables kmod-tun kmod-nft-tproxy kmod-nft-nat kmod-inet-diag kmod-netlink-diag; do
+        if ! pkg_is_installed "$dep"; then
+            msg "Installing dependency: $dep"
+            pkg_install_name "$dep" || warn "Package $dep might be built-in or not in feed"
+        fi
+    done
+
+    for opt_dep in kmod-amneziawg amneziawg-tools; do
+        if ! pkg_is_installed "$opt_dep"; then
+            pkg_install_name "$opt_dep" >/dev/null 2>&1 || true
+        fi
+    done
 }
 
 sync_time() {

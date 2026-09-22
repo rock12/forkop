@@ -1,59 +1,114 @@
-# Forkop (Podkop Plus)
+# Forkop
 
-[![Star](https://img.shields.io/github/stars/ushan0v/forkop?style=social)](https://github.com/ushan0v/forkop/stargazers)
-[![Releases](https://img.shields.io/github/v/release/ushan0v/forkop?label=releases)](https://github.com/ushan0v/forkop/releases)
-[![Telegram](https://img.shields.io/badge/Telegram-Forkop%20%7C%20Chat-2CA5E0?logo=telegram\&logoColor=white)](https://t.me/forkop_chat)
-[![AI Assistant](https://img.shields.io/badge/Telegram-Forkop%20%7C%20AI%20Assistant-2CA5E0?logo=telegram\&logoColor=white)](https://t.me/forkop_aibot)
+[![Releases](https://img.shields.io/github/v/release/rock12/forkop?label=Release&color=blue)](https://github.com/rock12/forkop/releases)
+[![OpenWrt](https://img.shields.io/badge/OpenWrt-24.10%20%7C%2025.x-blue?logo=openwrt&logoColor=white)](https://openwrt.org/)
+[![License](https://img.shields.io/badge/License-GPL--2.0-green.svg)](LICENSE)
 
-> **Forkop — это бывший Podkop Plus.** Проект переименован и продолжает развиваться как независимый форк [Podkop](https://github.com/itdoginfo/podkop).
+**Forkop** — универсальный комбайн маршрутизации и обхода сетевых блокировок для роутеров под управлением **OpenWrt** (24.10, 25.x и новее). Построен на базе ядра **sing-box**, модульной архитектуры **ucode** и современного реактивного веб-интерфейса **LuCI**.
 
-### Установка
+---
 
+## ✨ Ключевые возможности
+
+### 🚀 Поддерживаемые протоколы и туннели
+* **VLESS Reality & Vision:** современная маскировка трафика под легитимный TLS без собственного домена.
+* **Hysteria 2:** скоростной UDP-протокол на базе модифицированного QUIC для сетей с высокими потерями.
+* **xHTTP (sing-box extended):** потоковая передача через HTTP/2 и HTTP/3.
+* **AmneziaWG (AWG):** обфусцированный WireGuard. Включает автоматическую генерацию Cloudflare WARP и поддержку кастомных префиксов рукопожатия (`WARP_QUIC_I1` и др.) для надёжного обхода фильтрации ТСПУ.
+* **Mieru:** протокол с маскировкой под случайный трафик и защитой от активного зондирования.
+* **UDPspeeder:** прямое дублирование пакетов (FEC) для стабилизации высоконагруженных UDP-соединений и игр на нестабильных каналах.
+* **Shadowsocks, ShadowTLS, TUIC, стандартный WireGuard.**
+
+### 🛡️ Интеграция локальных утилит обхода DPI
+* **Zapret (nfqws)** и **Zapret2 (nfqws2):** гибкая фрагментация TCP-пакетов, fake-запросы и подмена TTL.
+* **ByeDPI (ciadpi):** локальный SOCKS-прокси с расщеплением TCP-потоков.
+* Поддержка одновременной гибридной работы (маршрутизация sing-box + DPI-утилиты для выбранных ресурсов).
+
+### 📋 Менеджер подписок
+* Поддержка подписок в форматах **Base64, Clash, sing-box JSON, V2Ray**.
+* Встроенная поддержка привязки устройств **Remnawave X-HWID** (корректная работа с сервисами вроде Matryoshka VPN и др.).
+* Автоматическое обновление по расписанию, проверка доступности и пинга, сортировка по задержке.
+
+### 🌐 Современный веб-интерфейс LuCI
+* Интерактивный **Dashboard** с измерением задержки серверов в реальном времени.
+* Ручное переключение активных узлов прямо из веб-интерфейса через Clash API.
+* Встроенная диагностика, журналы логов, проверка сетевых интерфейсов и правил NFTables.
+* Полная локализация на русский и английский языки.
+
+---
+
+## 📥 Быстрая установка
+
+Подключитесь к роутеру по SSH под пользователем `root` и выполните одну команду:
+
+### Способ 1: Через `wget` (по умолчанию в OpenWrt)
 ```sh
-sh <(wget -O - https://raw.githubusercontent.com/ushan0v/forkop/main/install.sh)
+sh <(wget -O - https://raw.githubusercontent.com/rock12/forkop/main/install.sh)
 ```
 
-<details>
-<summary><sub>Альтернативный способ установки</sub></summary>
-
+### Способ 2: Через `curl`
 ```sh
-sh <(wget -O - https://forkop.sourceforge.io/install.sh)
+sh <(curl -fsSL https://raw.githubusercontent.com/rock12/forkop/main/install.sh)
 ```
 
-</details>
+Скрипт установки автоматически:
+1. Определит архитектуру процессора и версию OpenWrt.
+2. Обновит репозитории (`apk update` или `opkg update`).
+3. Установит все необходимые системные зависимости и модули ядра.
+4. Загрузит свежие пакеты `forkop`, `luci-app-forkop`, `luci-i18n-forkop-ru` из последнего релиза на GitHub.
+5. Предложит установить подходящую сборку **sing-box** (`stable` из официального фида или `extended` для поддержки xHTTP).
+6. Запустит службу и очистит кэш LuCI.
 
-### Что нового в этом форке
+---
 
-* Поддержка подписок.
-* Поддержка sing-box extended и транспорта XHTTP.
-* Обновлённый LuCI-интерфейс.
-* Расширенное управление секциями.
-* Новые условия маршрутизации.
-* Возможность поднять собственный VPN/proxy-сервер.
-* Менеджер обновлений и установки компонентов.
-* Встроенный мониторинг соединений.
-* Расширенные настройки URLTest-групп.
-* Автоматический выбор узла по приоритету.
-* Каскадные подключения.
-* Маршрутизация DNS-запросов через прокси.
-* Резервные DNS-серверы.
-* Отдельные DNS-серверы для выбранных доменов.
-* Поддержка IPv6.
-* Действие Bypass с полным обходом sing-box.
-* Интеграция Zapret, Zapret2 и ByeDPI как отдельных действий секции.
-* Служба полностью переписана на ucode.
-* Другие исправления и улучшения.
+## 🔧 Установка только зависимостей
 
-### Документация
+Если вы собираете пакеты вручную или хотите заранее подготовить систему роутера:
+```sh
+sh <(wget -O - https://raw.githubusercontent.com/rock12/forkop/main/install-deps.sh)
+```
 
-Отдельной документации со всеми изменениями, нововведениями и инструкцией по настройке пока что не существует. Задать вопрос, сообщить о проблеме или обсудить проект можно в [Telegram-чате](https://t.me/forkop_chat) проекта.
+### Список устанавливаемых зависимостей:
+* **Среда выполнения и утилиты:** `ucode`, `ucode-mod-fs`, `ucode-mod-uci`, `curl`, `ca-bundle`, `bind-dig`, `ip-full`, `coreutils-base64`, `nftables`.
+* **Модули ядра Linux:** `kmod-tun`, `kmod-nft-tproxy`, `kmod-nft-nat`, `kmod-inet-diag`, `kmod-netlink-diag`.
+* **Дополнительно для AmneziaWG:** `kmod-amneziawg`, `amneziawg-tools`.
 
-Как альтернативу документации для быстрых персонализированных ответов используйте бесплатного, специально для этого созданного, AI-ассистента [@forkop_aibot](https://t.me/forkop_aibot).
+---
 
-### Поддержать проект
+## 📦 Ручная установка из GitHub Releases
 
-* 💳 **Карты РФ / СБП / Tinkoff Pay:** [Донат на CloudTips](https://pay.cloudtips.ru/p/385e5af2)
-* 💎 **USDT (сеть TON):** `UQAOCDav39WJ2gvnzs9RQ_IsF2dcGrcpw4U0j6XGO7je7uwm`
-* 🟢 **USDT (сеть TRC-20):** `TEMaZFyM8RQpkbd5LvB8CFJwxCyhHauKAe`
-* 🪙 **USDT (сети ERC-20 / BEP-20 / Polygon / Monad):** `0xe8aabb21c320240fe45b6087e68c6fe40a92d8bf`
-* 🟠 **USDT (сеть Solana):** `AhhUjTci9zDKQjUfgLacFR4LiHX9nmZud6DZ8YdbpjEB`
+Вы можете скачать готовые пакеты со страницы [Releases](https://github.com/rock12/forkop/releases):
+
+### Для OpenWrt с пакетным менеджером `apk` (25.x / 24.10):
+```sh
+apk add --allow-untrusted forkop_<версия>.apk
+apk add --allow-untrusted luci-app-forkop_<версия>.apk
+apk add --allow-untrusted luci-i18n-forkop-ru_<версия>.apk
+```
+
+### Для OpenWrt с пакетным менеджером `opkg`:
+```sh
+opkg install --force-overwrite forkop_<версия>.ipk
+opkg install --force-overwrite luci-app-forkop_<версия>.ipk
+opkg install --force-overwrite luci-i18n-forkop-ru_<версия>.ipk
+```
+
+После установки обновите кэш LuCI и перезапустите rpcd:
+```sh
+rm -f /tmp/luci-indexcache* /var/luci-indexcache*
+/etc/init.d/rpcd reload
+```
+
+---
+
+## ⚙️ Системные требования
+
+* **OpenWrt:** 24.10, 25.12 или новее.
+* **Архитектура:** Любая поддерживаемая OpenWrt (`aarch64_cortex-a53`, `mips_24kc`, `x86_64`, `arm_cortex-a7` и др.).
+* **Свободное место во flash-памяти:** не менее 15 МБ (рекомендуется роутер с 128+ МБ Flash или extroot).
+
+---
+
+## 📄 Лицензия
+
+Распространяется под лицензией **GPL-2.0-or-later**.
