@@ -4695,7 +4695,6 @@ function populateActionOptionValues(option) {
 
   option.value("connection", getActionOptionLabel("connection"));
   option.value("awg", getActionOptionLabel("awg"));
-  option.value("amneziawg", getActionOptionLabel("amneziawg"));
   option.value("mieru", getActionOptionLabel("mieru"));
   option.value("bypass", "Bypass");
   option.value("block", "Block");
